@@ -6,9 +6,51 @@
     xmlns:local="using:advgenofflinewebdownloader"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
 
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-        <Button x:Name="myButton" Click="myButton_Click">Click Me</Button>
-    </StackPanel>
+    mc:Ignorable="d">
+ <!-- Generate a grid with top menu bar -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <muxc:MenuBar>
+            <muxc:MenuBarItem Title="File">
+                <MenuFlyoutSubItem Text="New">
+                    
+                </MenuFlyoutSubItem>
+                <MenuFlyoutItem Text="Open..."/>
+                <MenuFlyoutItem Text="Save"/>
+                <MenuFlyoutItem Text="Save As"/>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Exit"/>
+            </muxc:MenuBarItem>
+
+            <muxc:MenuBarItem Title="Logs">
+                <MenuFlyoutItem Text="View"/>
+                <MenuFlyoutItem Text="Clear All"/>
+               
+            </muxc:MenuBarItem>
+
+            <muxc:MenuBarItem Title="View">
+                <MenuFlyoutItem Text="Output"/>
+                <MenuFlyoutSeparator/>
+                <muxc:RadioMenuFlyoutItem Text="Landscape" GroupName="OrientationGroup"/>
+                <muxc:RadioMenuFlyoutItem Text="Portrait" GroupName="OrientationGroup" IsChecked="True"/>
+                <MenuFlyoutSeparator/>
+                <muxc:RadioMenuFlyoutItem Text="Small icons" GroupName="SizeGroup"/>
+                <muxc:RadioMenuFlyoutItem Text="Medium icons" IsChecked="True" GroupName="SizeGroup"/>
+                <muxc:RadioMenuFlyoutItem Text="Large icons" GroupName="SizeGroup"/>
+            </muxc:MenuBarItem>
+
+            <muxc:MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="About"/>
+            </muxc:MenuBarItem>
+        </muxc:MenuBar>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Button x:Name="myButton" Click="myButton_Click">Click Me</Button>
+        </StackPanel>
+    </Grid>
 </Window>
