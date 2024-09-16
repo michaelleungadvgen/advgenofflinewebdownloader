@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "advgenofflinewebdownloader (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "advgenofflinewebdownloader (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
