@@ -21,7 +21,7 @@ This is a C# project built using the WinUI framework for creating a Windows appl
 
 ```bash
 git clone https://github.com/michaelleungadvgen/advgenofflinewebdownloader.git
-```bash
+```
 2. Open the solution file (`.sln`) in Visual Studio.
 
 3. Build and run the project.
