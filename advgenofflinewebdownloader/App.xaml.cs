@@ -15,6 +15,8 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Microsoft.Extensions.DependencyInjection;
+using System.ComponentModel;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -33,6 +35,27 @@ namespace advgenofflinewebdownloader
         public App()
         {
             this.InitializeComponent();
+            _serviceProvider = ConfigureServices();
+        }
+        private IServiceProvider _serviceProvider;
+
+        public static IServiceProvider Services
+        {
+            get
+            {
+                IServiceProvider serviceProvider = ((App)Current)._serviceProvider
+                    ?? throw new InvalidOperationException("The service provider is not initialized");
+                return serviceProvider;
+            }
+        }
+
+        private static IServiceProvider ConfigureServices()
+        {
+            var provider = new ServiceCollection()
+              
+                .BuildServiceProvider(true);
+
+            return provider;
         }
 
         /// <summary>
