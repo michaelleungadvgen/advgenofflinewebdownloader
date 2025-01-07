@@ -1,12 +1,13 @@
+using advgenofflinewebdownloader.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 
-namespace advgenofflinewebdownloader.services
+namespace advgenofflinewebdownloader.Services
 {
-    public class FileDownloadService
+    public class FileDownloadService : IFileDownloadService
     {
         private readonly HttpClient _httpClient;
 
