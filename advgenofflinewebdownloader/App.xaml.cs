@@ -42,19 +42,10 @@ namespace advgenofflinewebdownloader
        
             services.AddSingleton<MainWindow>();
             services.AddScoped<IFileDownloadService, FileDownloadService>();
+            services.AddScoped<IMainPageService, MaingPageService>();
+            _serviceProvider = services.BuildServiceProvider();
         }
         private IServiceProvider _serviceProvider;
-
-        public static IServiceProvider Services
-        {
-            get
-            {
-                IServiceProvider serviceProvider = ((App)Current)._serviceProvider
-                    ?? throw new InvalidOperationException("The service provider is not initialized");
-                return serviceProvider;
-            }
-        }
-
         private static IServiceProvider ConfigureServices()
         {
             var provider = new ServiceCollection()
@@ -70,10 +61,10 @@ namespace advgenofflinewebdownloader
         /// <param name="args">Details about the launch request and process.</param>
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
-         
 
-            m_window = new MainWindow();
-           
+            // call m_window from the service provider
+            m_window = _serviceProvider.GetRequiredService<MainWindow>();
+
             m_window.Activate();
         }
 

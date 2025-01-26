@@ -1,3 +1,4 @@
+using advgenofflinewebdownloader.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -23,8 +24,11 @@ namespace advgenofflinewebdownloader
     /// </summary>
     public sealed partial class MainWindow : Window
     {
-        public MainWindow()
+
+        public IMainPageService _mainPageService;
+        public MainWindow(IMainPageService mainPageService)
         {
+            _mainPageService = mainPageService;
             this.InitializeComponent();
         }
 
