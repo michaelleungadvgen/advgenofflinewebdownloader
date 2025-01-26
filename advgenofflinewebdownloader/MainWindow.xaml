@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="advgenofflinewebdownloader.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:advgenofflinewebdownloader"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+
+    mc:Ignorable="d">
+ <!-- Generate a grid with top menu bar -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            
+        </Grid.RowDefinitions>
+        <muxc:MenuBar>
+            <muxc:MenuBarItem Title="File">
+                <MenuFlyoutSubItem Text="New">
+                    
+                </MenuFlyoutSubItem>
+                <MenuFlyoutItem Text="Open..."/>
+                <MenuFlyoutItem Text="Save"/>
+                <MenuFlyoutItem Text="Save As"/>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Exit"/>
+            </muxc:MenuBarItem>
+
+            <muxc:MenuBarItem Title="Logs">
+                <MenuFlyoutItem Text="View"/>
+                <MenuFlyoutItem Text="Clear All"/>
+               
+            </muxc:MenuBarItem>
+
+            <muxc:MenuBarItem Title="View">
+                <MenuFlyoutItem Text="Output"/>
+                <MenuFlyoutSeparator/>
+                <muxc:RadioMenuFlyoutItem Text="Landscape" GroupName="OrientationGroup"/>
+                <muxc:RadioMenuFlyoutItem Text="Portrait" GroupName="OrientationGroup" IsChecked="True"/>
+                <MenuFlyoutSeparator/>
+                <muxc:RadioMenuFlyoutItem Text="Small icons" GroupName="SizeGroup"/>
+                <muxc:RadioMenuFlyoutItem Text="Medium icons" IsChecked="True" GroupName="SizeGroup"/>
+                <muxc:RadioMenuFlyoutItem Text="Large icons" GroupName="SizeGroup"/>
+            </muxc:MenuBarItem>
+
+            <muxc:MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="About"/>
+            </muxc:MenuBarItem>
+        </muxc:MenuBar>
+
+        <!-- Form Gird with with Two Columns-->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center"/>
+            <TextBox Grid.Column="1" x:Name="txtName" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="0" Grid.Row="1" Text="URL:" VerticalAlignment="Center"/>
+            <TextBox Grid.Column="1" Grid.Row="1" x:Name="txtURL" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="0" Grid.Row="2" Text="Folder" VerticalAlignment="Center"/>
+             <!-- Select a folder-->
+            <muxc:Button Grid.Column="1" Grid.Row="2" x:Name="btnFolder" Content="Select Folder" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="0" Grid.Row="3" Text="Thread Count" VerticalAlignment="Center"/>
+            <NumberBox Grid.Column="1" Grid.Row="3"  Name="numThreadCount" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="0" Grid.Row="4" Text="Message" VerticalAlignment="Center"/>
+            <ListBox Grid.Row="5" Grid.ColumnSpan="2"  x:Name="lstMessage" Margin="15" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"/>
+        </Grid>
+       
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="15">
+            <Button x:Name="myButton" Click="myButton_Click">Download</Button>
+        </StackPanel>
+    </Grid>
+</Window>
