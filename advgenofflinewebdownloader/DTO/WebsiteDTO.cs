@@ -10,5 +10,6 @@ namespace advgenofflinewebdownloader.DTO
     {
         public string URL { get; set; }
         public IList<string> FileUrls { get; set; }
+        public string Content { get; set; }
     }
 }

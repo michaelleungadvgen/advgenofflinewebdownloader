@@ -10,7 +10,7 @@ namespace advgenofflinewebdownloader.Services
     public class FileDownloadService : IFileDownloadService
     {
         private readonly HttpClient _httpClient;
-
+        private string[] subTypes = ["png","css",];
         public FileDownloadService()
         {
             _httpClient = new HttpClient();

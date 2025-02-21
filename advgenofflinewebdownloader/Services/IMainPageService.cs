@@ -10,5 +10,6 @@ namespace advgenofflinewebdownloader.Services
     public interface IMainPageService
     {
         WebsiteDTO Load(string path);
+        bool Download();
     }
 }
