@@ -1,4 +1,5 @@
 using advgenofflinewebdownloader.Services;
+using advgenofflinewebdownloader.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -26,15 +27,17 @@ namespace advgenofflinewebdownloader
     {
 
         public IMainPageService _mainPageService;
-        public MainWindow(IMainPageService mainPageService)
+        public MainWindowViewModel _mainWindowView;
+        public MainWindow(IMainPageService mainPageService,MainWindowViewModel mainWindowViewModel)
         {
             _mainPageService = mainPageService;
+            _mainWindowView = mainWindowViewModel;
             this.InitializeComponent();
         }
 
-        private void myButton_Click(object sender, RoutedEventArgs e)
+        private void downloadButton_Click(object sender, RoutedEventArgs e)
         {
-            myButton.Content = "Clicked";
+          //  myButton.Content = "Clicked";
         }
     }
 }

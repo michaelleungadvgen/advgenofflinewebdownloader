@@ -18,6 +18,11 @@ namespace advgenofflinewebdownloader.Services
             this.projectRepository = projectRepository;
         }
 
+        public bool Download()
+        {
+            return false;
+        }
+
         public WebsiteDTO Load(string path)
         {
             return null;

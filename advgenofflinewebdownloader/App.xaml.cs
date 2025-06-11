@@ -18,6 +18,8 @@ using Windows.Foundation.Collections;
 using Microsoft.Extensions.DependencyInjection;
 using System.ComponentModel;
 using advgenofflinewebdownloader.Services;
+using advgenofflinewebdownloader.Repo;
+using advgenofflinewebdownloader.ViewModels;
 
 
 // To learn more about WinUI, the WinUI project structure,
@@ -41,7 +43,9 @@ namespace advgenofflinewebdownloader
             var services = new ServiceCollection();
        
             services.AddSingleton<MainWindow>();
+            services.AddTransient<MainWindowViewModel>();
             services.AddScoped<IFileDownloadService, FileDownloadService>();
+            services.AddScoped<IProjectRepository,ProjectRepository>();
             services.AddScoped<IMainPageService, MaingPageService>();
             _serviceProvider = services.BuildServiceProvider();
         }

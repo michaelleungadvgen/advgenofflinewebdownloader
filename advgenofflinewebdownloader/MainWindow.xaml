@@ -79,7 +79,7 @@
         </Grid>
        
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="15">
-            <Button x:Name="myButton" Click="myButton_Click">Download</Button>
+            <Button x:Name="downloadButton" Click="downloadButton_Click">Download</Button>
         </StackPanel>
     </Grid>
 </Window>
