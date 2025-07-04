@@ -43,12 +43,12 @@ namespace advgenofflinewebdownloader.ViewModels
 
         private void LoadProjects()
         {
-            var projects = _mainPageService.GetProjects();
+            /*var projects = _mainPageService.GetProjects();
             Projects.Clear();
             foreach (var project in projects)
             {
                 Projects.Add(project);
-            }
+            }*/
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

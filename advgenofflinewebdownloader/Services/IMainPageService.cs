@@ -12,6 +12,6 @@ namespace advgenofflinewebdownloader.Services
     {
         WebsiteDTO Load(string path);
         bool Download();
-        IEnumerable<Project> GetProjects();
+
     }
 }

@@ -23,10 +23,7 @@ namespace advgenofflinewebdownloader.Services
         {
             return false;
         }
-        public IEnumerable<Project> GetProjects()
-        {
-            return projectRepository.GetAllProjects();
-        }
+   
         public WebsiteDTO Load(string path)
         {
             return null;

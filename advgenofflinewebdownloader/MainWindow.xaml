@@ -22,7 +22,7 @@
                 <MenuFlyoutSubItem Text="New">
                     
                 </MenuFlyoutSubItem>
-                <MenuFlyoutItem Text="Open..."/>
+                <MenuFlyoutItem Text="Open..." Click="OpenMenuItem_Click"/>
                 <MenuFlyoutItem Text="Save"/>
                 <MenuFlyoutItem Text="Save As"/>
                 <MenuFlyoutSeparator />

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using advgenofflinewebdownloader.Data;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +9,6 @@ namespace advgenofflinewebdownloader.Repo
 {
     public interface IProjectRepository
     {
-        IList<Data.Project> GetAllProjects();
+        Project LoadProject(string file);
     }
 }
