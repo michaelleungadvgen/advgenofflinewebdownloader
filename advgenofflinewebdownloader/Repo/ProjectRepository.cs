@@ -21,7 +21,33 @@ namespace advgenofflinewebdownloader.Repo
             }
             return true;
         }
-        
+
+        public IList<Project> LoadProjectFiles(string file)
+        {
+            // Load the project from a file
+            if (!File.Exists(file))
+            {
+                return new List<Project>();
+            }
+            using (StreamReader reader = new StreamReader(file))
+            {
+                string json = reader.ReadToEnd();
+                return new List<Project> { JsonConvert.DeserializeObject<Project>(json) };
+            }
+        }
+        {
+            // Load all projects from a file
+            string filePath = GetFilePath();
+            if (!File.Exists(filePath))
+            {
+                return new List<Project>();
+            }
+            using (StreamReader reader = new StreamReader(filePath))
+            {
+                string json = reader.ReadToEnd();
+                return JsonConvert.DeserializeObject<List<Project>>(json);
+            }
+
             /* for IProjectDataStore and JsonFileBased interface.生成C#代码表示IJsonFileBased项目的实现：public class JsonFileBased : IJsonFileBased
     {
        public void Save( List<Project> projects)

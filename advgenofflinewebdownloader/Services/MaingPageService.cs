@@ -1,4 +1,5 @@
-﻿using advgenofflinewebdownloader.DTO;
+﻿using advgenofflinewebdownloader.Data;
+using advgenofflinewebdownloader.DTO;
 using advgenofflinewebdownloader.Repo;
 using System;
 using System.Collections.Generic;
@@ -22,7 +23,10 @@ namespace advgenofflinewebdownloader.Services
         {
             return false;
         }
-
+        public IEnumerable<Project> GetProjects()
+        {
+            return projectRepository.GetAllProjects();
+        }
         public WebsiteDTO Load(string path)
         {
             return null;

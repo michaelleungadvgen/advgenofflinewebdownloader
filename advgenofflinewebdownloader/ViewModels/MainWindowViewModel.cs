@@ -1,4 +1,5 @@
 ﻿using advgenofflinewebdownloader.Data;
+using advgenofflinewebdownloader.Helpers;
 using advgenofflinewebdownloader.Services;
 using System;
 using System.Collections.Generic;
@@ -57,4 +58,5 @@ namespace advgenofflinewebdownloader.ViewModels
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
+    
 }

@@ -8,5 +8,6 @@ namespace advgenofflinewebdownloader.Repo
 {
     public interface IProjectRepository
     {
+        IList<Data.Project> GetAllProjects();
     }
 }
