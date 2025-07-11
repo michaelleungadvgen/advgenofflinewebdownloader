@@ -51,7 +51,6 @@ namespace advgenofflinewebdownloader
             WinRT.Interop.InitializeWithWindow.Initialize(fileOpenPicker, hWnd);
             
             // Add file types
-            fileOpenPicker.FileTypeFilter.Add(".txt");
             fileOpenPicker.FileTypeFilter.Add(".json");
             
             // Open file picker
@@ -68,6 +67,34 @@ namespace advgenofflinewebdownloader
                 
                 // Add to message list
                 lstMessage.Items.Add($"Opened file: {file.Path}");
+            }
+        }
+
+        // Add this method to the MainWindow class
+        private async void SaveAsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var savePicker = new FileSavePicker();
+
+            // Initialize file picker
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+
+            // Configure save picker
+            savePicker.FileTypeChoices.Add("JON file", new List<string>() { ".json" });
+        
+            // Open file picker
+            StorageFile file = await savePicker.PickSaveFileAsync();
+
+            if (file != null)
+            {
+                // Create the content to save
+                string contentToSave = $"URL: {txtURL.Text}\nThread Count: {numThreadCount.Value}";
+
+                // Save the file
+                await FileIO.WriteTextAsync(file, contentToSave);
+
+                // Update message list
+                lstMessage.Items.Add($"File saved: {file.Path}");
             }
         }
     }

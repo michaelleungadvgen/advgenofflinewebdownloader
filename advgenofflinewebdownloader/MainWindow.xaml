@@ -24,7 +24,7 @@
                 </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Open..." Click="OpenMenuItem_Click"/>
                 <MenuFlyoutItem Text="Save"/>
-                <MenuFlyoutItem Text="Save As"/>
+                <MenuFlyoutItem Text="Save As" Click="SaveAsMenuItem_Click"/>
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Exit"/>
             </muxc:MenuBarItem>
