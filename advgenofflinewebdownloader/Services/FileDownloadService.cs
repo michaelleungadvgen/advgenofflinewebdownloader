@@ -35,7 +35,12 @@ using System.Net.Http;
 
         public FileDownloadService()
         {
-            _httpClient = new HttpClient();
+            var handler = new HttpClientHandler()
+            {
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+            };
+            
+            _httpClient = new HttpClient(handler);
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
             _downloadedUrls = new HashSet<string>();
@@ -153,6 +158,12 @@ using System.Net.Http;
                     var processedContent = await ProcessHtmlContent(content, url, depth, relativePath, cancellationToken);
                     await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
                 }
+                else if (contentType.Contains("text/css") || fileName.EndsWith(".css"))
+                {
+                    // Process CSS content for font and resource references
+                    var processedContent = await ProcessCssContent(content, url, relativePath, cancellationToken);
+                    await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
+                }
                 else
                 {
                     // Save binary content
@@ -195,6 +206,7 @@ using System.Net.Http;
                 {
                     if (resource.IsPage && depth > 0)
                     {
+                        OnStatusChanged($"Recursively downloading page: {resource.AbsoluteUrl} (depth: {depth})", false);
                         downloadTasks.Add(DownloadWebsiteRecursive(
                             resource.AbsoluteUrl,
                             depth - 1,
@@ -203,10 +215,15 @@ using System.Net.Http;
                     }
                     else if (!resource.IsPage)
                     {
+                        OnStatusChanged($"Downloading resource: {resource.AbsoluteUrl}", false);
                         downloadTasks.Add(DownloadResource(
                             resource.AbsoluteUrl,
                             GetRelativePathForUrl(resource.AbsoluteUrl, baseUri),
                             cancellationToken));
+                    }
+                    else if (resource.IsPage && depth == 0)
+                    {
+                        OnStatusChanged($"Skipping page (max depth reached): {resource.AbsoluteUrl}", false);
                     }
                 }
             }
@@ -218,17 +235,128 @@ using System.Net.Http;
 
             await Task.WhenAll(downloadTasks);
 
-            // Replace URLs in HTML
+            // Replace URLs in HTML - use more specific replacements to avoid corrupting HTML tags
             foreach (var resource in resources)
             {
                 if (ShouldDownload(resource.AbsoluteUrl, baseUri))
                 {
                     var localPath = GetLocalPath(resource.AbsoluteUrl, baseUri, relativePath);
-                    html = html.Replace(resource.OriginalUrl, localPath);
+                    
+                    // Replace URLs in quotes to avoid corrupting HTML tags
+                    var quotedOriginal = $"\"{resource.OriginalUrl}\"";
+                    var quotedLocal = $"\"{localPath}\"";
+                    html = html.Replace(quotedOriginal, quotedLocal);
+                    
+                    var singleQuotedOriginal = $"'{resource.OriginalUrl}'";
+                    var singleQuotedLocal = $"'{localPath}'";
+                    html = html.Replace(singleQuotedOriginal, singleQuotedLocal);
+                    
+                    // Replace URLs in CSS url() functions
+                    var cssOriginal = $"url({resource.OriginalUrl})";
+                    var cssLocal = $"url({localPath})";
+                    html = html.Replace(cssOriginal, cssLocal);
+                    
+                    var cssQuotedOriginal = $"url('{resource.OriginalUrl}')";
+                    var cssQuotedLocal = $"url('{localPath}')";
+                    html = html.Replace(cssQuotedOriginal, cssQuotedLocal);
+                    
+                    var cssDoubleQuotedOriginal = $"url(\"{resource.OriginalUrl}\")";
+                    var cssDoubleQuotedLocal = $"url(\"{localPath}\")";
+                    html = html.Replace(cssDoubleQuotedOriginal, cssDoubleQuotedLocal);
                 }
             }
 
             return html;
+        }
+
+        private async Task<string> ProcessCssContent(string css, string currentUrl, string relativePath, CancellationToken cancellationToken)
+        {
+            var uri = new Uri(currentUrl);
+            var baseUri = new Uri(uri.GetLeftPart(UriPartial.Authority));
+
+            // Find all CSS resources (fonts, images, etc.)
+            var resources = ExtractCssResources(css, currentUrl, baseUri);
+
+            // Download resources
+            var downloadTasks = new List<Task>();
+            foreach (var resource in resources.Distinct())
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
+                if (ShouldDownload(resource.AbsoluteUrl, baseUri))
+                {
+                    downloadTasks.Add(DownloadResource(
+                        resource.AbsoluteUrl,
+                        GetRelativePathForUrl(resource.AbsoluteUrl, baseUri),
+                        cancellationToken));
+                }
+            }
+
+            await Task.WhenAll(downloadTasks);
+
+            // Replace URLs in CSS
+            foreach (var resource in resources)
+            {
+                if (ShouldDownload(resource.AbsoluteUrl, baseUri))
+                {
+                    var localPath = GetLocalPath(resource.AbsoluteUrl, baseUri, relativePath);
+                    
+                    // Replace URLs in CSS url() functions
+                    var cssOriginal = $"url({resource.OriginalUrl})";
+                    var cssLocal = $"url({localPath})";
+                    css = css.Replace(cssOriginal, cssLocal);
+                    
+                    var cssQuotedOriginal = $"url('{resource.OriginalUrl}')";
+                    var cssQuotedLocal = $"url('{localPath}')";
+                    css = css.Replace(cssQuotedOriginal, cssQuotedLocal);
+                    
+                    var cssDoubleQuotedOriginal = $"url(\"{resource.OriginalUrl}\")";
+                    var cssDoubleQuotedLocal = $"url(\"{localPath}\")";
+                    css = css.Replace(cssDoubleQuotedOriginal, cssDoubleQuotedLocal);
+                }
+            }
+
+            return css;
+        }
+
+        private List<ResourceInfo> ExtractCssResources(string css, string currentUrl, Uri baseUri)
+        {
+            var resources = new List<ResourceInfo>();
+            var cssPatterns = new[]
+            {
+                (@"url\([""']?([^""')]+)[""']?\)", false),
+                (@"@import\s+[""']([^""']+)[""']", false),
+                (@"@import\s+url\([""']?([^""')]+)[""']?\)", false)
+            };
+
+            foreach (var (pattern, isPagePattern) in cssPatterns)
+            {
+                var matches = Regex.Matches(css, pattern, RegexOptions.IgnoreCase);
+                foreach (Match match in matches)
+                {
+                    if (match.Groups.Count > 1)
+                    {
+                        var resourceUrl = match.Groups[1].Value;
+                        if (string.IsNullOrEmpty(resourceUrl) ||
+                            resourceUrl.StartsWith("#") ||
+                            resourceUrl.StartsWith("data:") ||
+                            resourceUrl.StartsWith("javascript:"))
+                            continue;
+
+                        var absoluteUrl = GetAbsoluteUrl(resourceUrl, currentUrl, baseUri);
+                        
+                        resources.Add(new ResourceInfo
+                        {
+                            OriginalUrl = resourceUrl,
+                            AbsoluteUrl = absoluteUrl,
+                            IsPage = false
+                        });
+                    }
+                }
+            }
+
+            return resources;
         }
 
         private List<ResourceInfo> ExtractResources(string html, string currentUrl, Uri baseUri)
@@ -236,16 +364,22 @@ using System.Net.Http;
             var resources = new List<ResourceInfo>();
             var resourcePatterns = new[]
             {
-                (@"<link[^>]+href=[""']([^""']+)[""']", false),
-                (@"<script[^>]+src=[""']([^""']+)[""']", false),
-                (@"<img[^>]+src=[""']([^""']+)[""']", false),
-                (@"<a[^>]+href=[""']([^""']+)[""']", true),
+                (@"<link[^>]*rel=[""']stylesheet[""'][^>]*href=[""']([^""']+)[""']", false),
+                (@"<link[^>]*href=[""']([^""']+)[""'][^>]*rel=[""']stylesheet[""']", false),
+                (@"<script[^>]*type=[""']text/javascript[""'][^>]*src=[""']([^""']+)[""']", false),
+                (@"<script[^>]*src=[""']([^""']+)[""'][^>]*type=[""']text/javascript[""']", false),
+                (@"<script[^>]*src=[""']([^""']+)[""']", false),
+                (@"<img[^>]*src=[""']([^""']+)[""']", false),
+                (@"<a[^>]*href=[""']([^""']+)[""']", true),
                 (@"url\([""']?([^""')]+)[""']?\)", false),
-                (@"<source[^>]+src=[""']([^""']+)[""']", false),
-                (@"<video[^>]+src=[""']([^""']+)[""']", false),
-                (@"<audio[^>]+src=[""']([^""']+)[""']", false),
-                (@"<link[^>]+rel=[""']icon[""'][^>]+href=[""']([^""']+)[""']", false),
-                (@"<link[^>]+href=[""']([^""']+)[""'][^>]+rel=[""']icon[""']", false)
+                (@"<source[^>]*src=[""']([^""']+)[""']", false),
+                (@"<video[^>]*src=[""']([^""']+)[""']", false),
+                (@"<audio[^>]*src=[""']([^""']+)[""']", false),
+                (@"<link[^>]*rel=[""']icon[""'][^>]*href=[""']([^""']+)[""']", false),
+                (@"<link[^>]*href=[""']([^""']+)[""'][^>]*rel=[""']icon[""']", false),
+                (@"@font-face[^}]*src:[^}]*url\([""']?([^""')]+)[""']?\)", false),
+                (@"src:[^;]*url\([""']?([^""')]+\.(?:woff2?|ttf|eot|otf|svg))[""']?\)", false),
+                (@"<link[^>]*rel=[""']preload[""'][^>]*href=[""']([^""']+\.(?:woff2?|ttf|eot|otf))[""']", false)
             };
 
             foreach (var (pattern, isPagePattern) in resourcePatterns)
@@ -362,7 +496,17 @@ using System.Net.Http;
                 return false;
 
             // Only download from same domain or subdomains
-            return uri.Host == baseUri.Host || uri.Host.EndsWith("." + baseUri.Host);
+            bool isSameDomain = uri.Host.Equals(baseUri.Host, StringComparison.OrdinalIgnoreCase);
+            bool isSubdomain = uri.Host.EndsWith("." + baseUri.Host, StringComparison.OrdinalIgnoreCase);
+            
+            bool shouldDownload = isSameDomain || isSubdomain;
+            
+            if (!shouldDownload)
+            {
+                OnStatusChanged($"Skipping external domain: {uri.Host} (base: {baseUri.Host})", false);
+            }
+            
+            return shouldDownload;
         }
 
      
@@ -374,23 +518,102 @@ using System.Net.Http;
                 ".zip", ".rar", ".7z", ".tar", ".gz", ".mp4", ".mp3", ".wav",
                 ".avi", ".mov", ".wmv", ".flv", ".webm"
             };
+            
+            // Split URL to get path without query parameters
             var path = url.Split('?')[0].ToLower();
-            return extensions.Any(ext => path.EndsWith(ext));
+            
+            // If it explicitly ends with a known asset extension, it's an asset
+            if (extensions.Any(ext => path.EndsWith(ext)))
+                return true;
+            
+            // If it explicitly ends with HTML extensions, it's a page
+            if (path.EndsWith(".html") || path.EndsWith(".htm") || path.EndsWith(".php") || 
+                path.EndsWith(".asp") || path.EndsWith(".aspx") || path.EndsWith(".jsp"))
+                return false;
+            
+            // If no extension or ends with slash, likely a page
+            if (path.EndsWith("/") || !path.Contains('.'))
+                return false;
+            
+            // If URL has query parameters (like ?page_id=13), it's likely a page
+            if (url.Contains('?'))
+                return false;
+            
+            // If URL has fragments (like #section), it's likely a page
+            if (url.Contains('#'))
+                return false;
+            
+            // Default to asset if we can't determine
+            return true;
         }
 
         private string GetFileNameFromUrl(string url)
         {
             var uri = new Uri(url);
             var path = uri.AbsolutePath;
+            var query = uri.Query;
 
+            // Handle root or directory paths
             if (string.IsNullOrEmpty(path) || path == "/" || path.EndsWith("/"))
+            {
+                if (!string.IsNullOrEmpty(query))
+                {
+                    // Convert query parameters to filename: ?page_id=13 -> page_id_13.html
+                    var queryFileName = query.TrimStart('?')
+                        .Replace("=", "_")
+                        .Replace("&", "_")
+                        .Replace("%20", "_")
+                        .Replace("+", "_");
+                    queryFileName = Regex.Replace(queryFileName, @"[^\w\.-]", "_");
+                    return queryFileName + ".html";
+                }
                 return "index.html";
+            }
 
             var fileName = Path.GetFileName(path);
+            
+            // Handle files without extensions
             if (string.IsNullOrEmpty(fileName) || !fileName.Contains('.'))
-                return fileName + ".html";
+            {
+                var baseFileName = string.IsNullOrEmpty(fileName) ? "index" : fileName;
+                
+                if (!string.IsNullOrEmpty(query))
+                {
+                    // Append query parameters: page.php?id=13 -> page_id_13.html
+                    var queryPart = query.TrimStart('?')
+                        .Replace("=", "_")
+                        .Replace("&", "_")
+                        .Replace("%20", "_")
+                        .Replace("+", "_");
+                    queryPart = Regex.Replace(queryPart, @"[^\w\.-]", "_");
+                    return baseFileName + "_" + queryPart + ".html";
+                }
+                
+                return baseFileName + ".html";
+            }
 
-            // Clean up filename
+            // Handle files with extensions
+            if (!string.IsNullOrEmpty(query))
+            {
+                var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+                var extension = Path.GetExtension(fileName);
+                
+                // For HTML-like files, append query to name
+                if (extension.ToLower() == ".html" || extension.ToLower() == ".htm" || 
+                    extension.ToLower() == ".php" || extension.ToLower() == ".asp" || 
+                    extension.ToLower() == ".aspx" || extension.ToLower() == ".jsp")
+                {
+                    var queryPart = query.TrimStart('?')
+                        .Replace("=", "_")
+                        .Replace("&", "_")
+                        .Replace("%20", "_")
+                        .Replace("+", "_");
+                    queryPart = Regex.Replace(queryPart, @"[^\w\.-]", "_");
+                    return nameWithoutExt + "_" + queryPart + ".html";
+                }
+            }
+
+            // Clean up filename for assets
             fileName = Regex.Replace(fileName, @"[^\w\.-]", "_");
             return fileName;
         }

@@ -23,7 +23,7 @@
                     
                 </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Open..." Click="OpenMenuItem_Click"/>
-                <MenuFlyoutItem Text="Save"/>
+                <MenuFlyoutItem Text="Save" Click="SaveMenuItem_Click"/>
                 <MenuFlyoutItem Text="Save As" Click="SaveAsMenuItem_Click"/>
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Exit"/>
@@ -66,12 +66,12 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center"/>
-            <TextBox Grid.Column="1" x:Name="txtName" VerticalAlignment="Center"/>
+            <TextBox Grid.Column="1" x:Name="txtName" Text="{x:Bind ViewModel.ProjectName, Mode=TwoWay}" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="0" Grid.Row="1" Text="URL:" VerticalAlignment="Center"/>
-            <TextBox Grid.Column="1" Grid.Row="1" x:Name="txtURL" VerticalAlignment="Center"/>
+            <TextBox Grid.Column="1" Grid.Row="1" x:Name="txtURL" Text="{x:Bind ViewModel.ProjectURL, Mode=TwoWay}" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="0" Grid.Row="2" Text="Folder" VerticalAlignment="Center"/>
              <!-- Select a folder-->
-            <muxc:Button Grid.Column="1" Grid.Row="2" x:Name="btnFolder" Content="Select Folder" VerticalAlignment="Center"/>
+            <muxc:Button Grid.Column="1" Grid.Row="2" x:Name="btnFolder" Content="Select Folder" Click="btnFolder_Click" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="0" Grid.Row="3" Text="Thread Count" VerticalAlignment="Center"/>
             <NumberBox Grid.Column="1" Grid.Row="3"  Name="numThreadCount" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="0" Grid.Row="4" Text="Message" VerticalAlignment="Center"/>

@@ -29,11 +29,70 @@ namespace advgenofflinewebdownloader.ViewModels
             }
         }
 
+        private Project _currentProject;
+        public Project CurrentProject
+        {
+            get => _currentProject;
+            set
+            {
+                _currentProject = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ProjectName));
+                OnPropertyChanged(nameof(ProjectURL));
+                OnPropertyChanged(nameof(ProjectDownloadPath));
+            }
+        }
+
+        public string ProjectName
+        {
+            get => _currentProject?.Name ?? "";
+            set
+            {
+                if (_currentProject != null)
+                {
+                    _currentProject.Name = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string ProjectURL
+        {
+            get => _currentProject?.URL ?? "";
+            set
+            {
+                if (_currentProject != null)
+                {
+                    _currentProject.URL = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string ProjectDownloadPath
+        {
+            get => _currentProject?.DownloadPath ?? "";
+            set
+            {
+                if (_currentProject != null)
+                {
+                    _currentProject.DownloadPath = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public void UpdateCurrentProject()
+        {
+            _mainPageService.SetCurrentProject(_currentProject);
+        }
+
         public MainWindowViewModel(IMainPageService mainPageService)
         {
             _mainPageService = mainPageService;
             Projects = new ObservableCollection<Project>();
             LoadProjectsCommand = new RelayCommand(ExecuteLoadProjects);
+            CurrentProject = new Project();
         }
 
         private void ExecuteLoadProjects(object parameter)

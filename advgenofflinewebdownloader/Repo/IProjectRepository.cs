@@ -10,5 +10,6 @@ namespace advgenofflinewebdownloader.Repo
     public interface IProjectRepository
     {
         Project LoadProject(string file);
+        bool Save(string file, Project project);
     }
 }
