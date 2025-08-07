@@ -20,6 +20,16 @@ namespace advgenofflinewebdownloader.Services
         {
             this.projectRepository = projectRepository;
             this.fileDownloadService = fileDownloadService;
+            
+            // Subscribe to download service events to forward status messages
+            this.fileDownloadService.StatusChanged += (sender, args) =>
+            {
+                if (currentProject != null)
+                {
+                    currentProject.Logs = currentProject.Logs ?? new List<string>();
+                    currentProject.Logs.Add($"[{(args.IsError ? "ERROR" : "INFO")}] {args.Status}");
+                }
+            };
         }
 
         public async Task<DownloadResult> Download()

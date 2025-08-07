@@ -73,6 +73,7 @@ using System.Net.Http;
                     _hostName + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
                 Directory.CreateDirectory(_downloadFolder);
 
+                OnStatusChanged($"Download folder created: {_downloadFolder}", false);
                 OnStatusChanged("Starting download...", false);
 
                 await DownloadWebsiteRecursive(url, depth, "", _cancellationTokenSource.Token);
@@ -136,6 +137,12 @@ using System.Net.Http;
             try
             {
                 OnStatusChanged($"Downloading: {url}", false);
+                
+                // Special debug for CSS files
+                if (url.Contains(".css"))
+                {
+                    OnStatusChanged($"DOWNLOADING CSS FILE: {url}", false);
+                }
 
                 var response = await _httpClient.GetAsync(url, cancellationToken);
                 if (!response.IsSuccessStatusCode)
@@ -152,20 +159,39 @@ using System.Net.Http;
                 var filePath = Path.Combine(_downloadFolder, relativePath, fileName);
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
 
+                OnStatusChanged($"Processing file: {fileName}, Content-Type: '{contentType}', URL: {url}", false);
+
+                // Debug CSS detection - Enhanced to catch more CSS files
+                bool isCssContentType = contentType.Contains("text/css") || contentType.Contains("application/css");
+                bool isCssFileName = fileName.EndsWith(".css", StringComparison.OrdinalIgnoreCase);
+                bool isCssUrl = url.Contains(".css", StringComparison.OrdinalIgnoreCase);
+                bool isCssContent = content.Contains("@font-face") || content.Contains("url(") || content.Contains("@import") || content.Contains("@charset") || content.Contains("background:") || content.Contains("background-image:");
+                bool isTextPlainCss = contentType.Contains("text/plain") && (isCssFileName || isCssUrl || isCssContent);
+                
+                OnStatusChanged($"CSS Detection - ContentType: {isCssContentType}, FileName: {isCssFileName}, URL: {isCssUrl}, Content: {isCssContent}, PlainText: {isTextPlainCss}", false);
+
                 if (contentType.Contains("text/html"))
                 {
+                    OnStatusChanged($"Processing HTML: {fileName}", false);
                     // Process HTML content
                     var processedContent = await ProcessHtmlContent(content, url, depth, relativePath, cancellationToken);
                     await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
                 }
-                else if (contentType.Contains("text/css") || fileName.EndsWith(".css"))
+                else if (isCssContentType || isCssFileName || isCssUrl || isCssContent || isTextPlainCss)
                 {
+                    string detectionMethod = isCssContentType ? "content-type" : 
+                                           isCssFileName ? "filename" : 
+                                           isCssUrl ? "url" : 
+                                           isCssContent ? "content-analysis" : 
+                                           "text-plain-css";
+                    OnStatusChanged($"Processing CSS: {fileName} (detected via: {detectionMethod})", false);
                     // Process CSS content for font and resource references
                     var processedContent = await ProcessCssContent(content, url, relativePath, cancellationToken);
                     await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
                 }
                 else
                 {
+                    OnStatusChanged($"Processing binary: {fileName} (not detected as CSS)", false);
                     // Save binary content
                     var bytes = await response.Content.ReadAsByteArrayAsync();
                     await File.WriteAllBytesAsync(filePath, bytes, cancellationToken);
@@ -194,6 +220,16 @@ using System.Net.Http;
 
             // Find all resources
             var resources = ExtractResources(html, currentUrl, baseUri);
+            
+            OnStatusChanged($"Found {resources.Count} total resources in HTML", false);
+            
+            // Debug CSS resources specifically
+            var cssResources = resources.Where(r => r.AbsoluteUrl.Contains(".css")).ToList();
+            OnStatusChanged($"Found {cssResources.Count} CSS resources in HTML", false);
+            foreach (var cssRes in cssResources)
+            {
+                OnStatusChanged($"CSS resource found in HTML: {cssRes.AbsoluteUrl}", false);
+            }
 
             // Download resources
             var downloadTasks = new List<Task>();
@@ -274,23 +310,35 @@ using System.Net.Http;
             var uri = new Uri(currentUrl);
             var baseUri = new Uri(uri.GetLeftPart(UriPartial.Authority));
 
+            OnStatusChanged($"Processing CSS file: {currentUrl}", false);
+
             // Find all CSS resources (fonts, images, etc.)
             var resources = ExtractCssResources(css, currentUrl, baseUri);
 
-            // Download resources
+            OnStatusChanged($"Found {resources.Count} resources in CSS", false);
+
+            // Download resources (remove duplicates by absolute URL)
             var downloadTasks = new List<Task>();
-            foreach (var resource in resources.Distinct())
+            var uniqueResources = resources.GroupBy(r => r.AbsoluteUrl).Select(g => g.First()).ToList();
+            
+            foreach (var resource in uniqueResources)
             {
                 if (cancellationToken.IsCancellationRequested)
                     break;
 
                 if (ShouldDownload(resource.AbsoluteUrl, baseUri))
                 {
+                    OnStatusChanged($"Downloading CSS resource: {resource.AbsoluteUrl}", false);
                     downloadTasks.Add(DownloadResource(
                         resource.AbsoluteUrl,
                         GetRelativePathForUrl(resource.AbsoluteUrl, baseUri),
                         cancellationToken));
                 }
+            }
+
+            lock (_lockObject)
+            {
+                _totalFiles = Math.Max(_totalFiles, _downloadedUrls.Count + downloadTasks.Count);
             }
 
             await Task.WhenAll(downloadTasks);
@@ -323,21 +371,137 @@ using System.Net.Http;
         private List<ResourceInfo> ExtractCssResources(string css, string currentUrl, Uri baseUri)
         {
             var resources = new List<ResourceInfo>();
-            var cssPatterns = new[]
+            
+            OnStatusChanged($"Extracting CSS resources from {currentUrl}", false);
+            OnStatusChanged($"CSS content preview (first 200 chars): {css.Substring(0, Math.Min(200, css.Length))}", false);
+            
+            // Always test with the specific example from the user to verify regex works
+            var testString = "url(../webfonts/fa-brands-400.woff2) format(\"woff2\"),url(../webfonts/fa-brands-400.ttf)";
+            OnStatusChanged($"Testing regex with example: {testString}", false);
+            var testMatches = Regex.Matches(testString, @"url\s*\(\s*[""']?([^""')]+)[""']?\s*\)", RegexOptions.IgnoreCase);
+            OnStatusChanged($"Test matches found: {testMatches.Count}", false);
+            foreach (Match testMatch in testMatches)
             {
-                (@"url\([""']?([^""')]+)[""']?\)", false),
+                OnStatusChanged($"Test match: '{testMatch.Groups[1].Value}'", false);
+            }
+            
+            // Check if CSS contains any url() patterns at all
+            if (css.Contains("url("))
+            {
+                OnStatusChanged($"CSS contains url() patterns", false);
+            }
+            else
+            {
+                OnStatusChanged($"CSS does NOT contain any url() patterns", false);
+            }
+            
+            // Find all url() functions in CSS, including multiple URLs in a single declaration
+            // Enhanced pattern to handle spaces, quotes, and various URL formats
+            var urlPattern = @"url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)";
+            var matches = Regex.Matches(css, urlPattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
+            
+            OnStatusChanged($"Found {matches.Count} URL matches in CSS", false);
+            
+            // Show first few matches for debugging
+            for (int i = 0; i < Math.Min(5, matches.Count); i++)
+            {
+                OnStatusChanged($"Match {i + 1}: '{matches[i].Groups[1].Value}'", false);
+            }
+            
+            foreach (Match match in matches)
+            {
+                if (match.Groups.Count > 1)
+                {
+                    var resourceUrl = match.Groups[1].Value.Trim();
+                    if (string.IsNullOrEmpty(resourceUrl) ||
+                        resourceUrl.StartsWith("#") ||
+                        resourceUrl.StartsWith("data:") ||
+                        resourceUrl.StartsWith("javascript:"))
+                        continue;
+
+                    // Clean up the URL - remove format(), hash, and query parameters
+                    var cleanUrl = resourceUrl;
+                    
+                    // Remove format() and other CSS function calls
+                    if (cleanUrl.Contains("format("))
+                    {
+                        cleanUrl = cleanUrl.Substring(0, cleanUrl.IndexOf("format(")).Trim();
+                    }
+                    
+                    // Remove query parameters and hash for path resolution
+                    var queryIndex = cleanUrl.IndexOf('?');
+                    if (queryIndex > 0)
+                    {
+                        cleanUrl = cleanUrl.Substring(0, queryIndex);
+                    }
+                    
+                    var hashIndex = cleanUrl.IndexOf('#');
+                    if (hashIndex > 0)
+                    {
+                        cleanUrl = cleanUrl.Substring(0, hashIndex);
+                    }
+                    
+                    // Remove any trailing whitespace or semicolons
+                    cleanUrl = cleanUrl.Trim().TrimEnd(';', ',').Trim();
+
+                    if (string.IsNullOrEmpty(cleanUrl))
+                        continue;
+
+                    var absoluteUrl = GetAbsoluteUrl(cleanUrl, currentUrl, baseUri);
+                    
+                    OnStatusChanged($"CSS resource found - Original: '{cleanUrl}', Current URL: {currentUrl}, Resolved: {absoluteUrl}", false);
+                    
+                    // Special debug for font files
+                    if (cleanUrl.Contains("webfonts") || cleanUrl.Contains("woff") || cleanUrl.Contains("ttf"))
+                    {
+                        OnStatusChanged($"FONT FILE DETECTED: {cleanUrl} -> {absoluteUrl}", false);
+                    }
+                    
+                    // Special debug for background images
+                    if (cleanUrl.Contains(".jpg") || cleanUrl.Contains(".jpeg") || cleanUrl.Contains(".png") || cleanUrl.Contains(".gif") || cleanUrl.Contains(".webp") || cleanUrl.Contains(".svg"))
+                    {
+                        OnStatusChanged($"BACKGROUND IMAGE DETECTED: {cleanUrl} -> {absoluteUrl}", false);
+                    }
+                    
+                    resources.Add(new ResourceInfo
+                    {
+                        OriginalUrl = cleanUrl,
+                        AbsoluteUrl = absoluteUrl,
+                        IsPage = false
+                    });
+                }
+            }
+
+            // Also find @import statements and background properties
+            var additionalPatterns = new[]
+            {
                 (@"@import\s+[""']([^""']+)[""']", false),
-                (@"@import\s+url\([""']?([^""')]+)[""']?\)", false)
+                (@"@import\s+url\s*\(\s*[""']?([^""')]+)[""']?\s*\)", false),
+                (@"background\s*:\s*[^;]*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false),
+                (@"background-image\s*:\s*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false),
+                (@"background-repeat\s*:\s*[^;]*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false),
+                (@"background-position\s*:\s*[^;]*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false),
+                (@"background-size\s*:\s*[^;]*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false),
+                (@"content\s*:\s*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false),
+                (@"list-style(?:-image)?\s*:\s*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false),
+                (@"cursor\s*:\s*url\s*\(\s*[""']?([^""')]+?)[""']?\s*\)", false)
             };
 
-            foreach (var (pattern, isPagePattern) in cssPatterns)
+            foreach (var (pattern, isPagePattern) in additionalPatterns)
             {
-                var matches = Regex.Matches(css, pattern, RegexOptions.IgnoreCase);
-                foreach (Match match in matches)
+                var importMatches = Regex.Matches(css, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                
+                // Debug specific patterns
+                if (pattern.Contains("background") && importMatches.Count > 0)
+                {
+                    OnStatusChanged($"Found {importMatches.Count} background URL matches with pattern: {pattern}", false);
+                }
+                
+                foreach (Match match in importMatches)
                 {
                     if (match.Groups.Count > 1)
                     {
-                        var resourceUrl = match.Groups[1].Value;
+                        var resourceUrl = match.Groups[1].Value.Trim();
                         if (string.IsNullOrEmpty(resourceUrl) ||
                             resourceUrl.StartsWith("#") ||
                             resourceUrl.StartsWith("data:") ||
@@ -366,6 +530,9 @@ using System.Net.Http;
             {
                 (@"<link[^>]*rel=[""']stylesheet[""'][^>]*href=[""']([^""']+)[""']", false),
                 (@"<link[^>]*href=[""']([^""']+)[""'][^>]*rel=[""']stylesheet[""']", false),
+                (@"<style[^>]*>.*?@import\s+[""']([^""']+)[""'].*?</style>", false),
+                (@"@import\s+[""']([^""']+\.css[^""']*)[""']", false),
+                (@"@import\s+url\([""']?([^""')]+\.css[^""']*)[""']?\)", false),
                 (@"<script[^>]*type=[""']text/javascript[""'][^>]*src=[""']([^""']+)[""']", false),
                 (@"<script[^>]*src=[""']([^""']+)[""'][^>]*type=[""']text/javascript[""']", false),
                 (@"<script[^>]*src=[""']([^""']+)[""']", false),
@@ -379,7 +546,9 @@ using System.Net.Http;
                 (@"<link[^>]*href=[""']([^""']+)[""'][^>]*rel=[""']icon[""']", false),
                 (@"@font-face[^}]*src:[^}]*url\([""']?([^""')]+)[""']?\)", false),
                 (@"src:[^;]*url\([""']?([^""')]+\.(?:woff2?|ttf|eot|otf|svg))[""']?\)", false),
-                (@"<link[^>]*rel=[""']preload[""'][^>]*href=[""']([^""']+\.(?:woff2?|ttf|eot|otf))[""']", false)
+                (@"<link[^>]*rel=[""']preload[""'][^>]*href=[""']([^""']+\.(?:woff2?|ttf|eot|otf))[""']", false),
+                (@"background(?:-image)?\s*:\s*url\([""']?([^""')]+)[""']?\)", false),
+                (@"style=[""'][^""']*background(?:-image)?\s*:\s*url\([""']?([^""')]+)[""']?\)", false)
             };
 
             foreach (var (pattern, isPagePattern) in resourcePatterns)
@@ -399,7 +568,10 @@ using System.Net.Http;
 
                         var absoluteUrl = GetAbsoluteUrl(resourceUrl, currentUrl, baseUri);
                         var isPage = isPagePattern && !IsAssetFile(absoluteUrl);
-
+                        if (absoluteUrl.Contains("woff"))
+                        {
+                            Console.WriteLine(absoluteUrl);
+                        }
                         resources.Add(new ResourceInfo
                         {
                             OriginalUrl = resourceUrl,
@@ -476,18 +648,40 @@ using System.Net.Http;
 
         private string GetAbsoluteUrl(string url, string currentUrl, Uri baseUri)
         {
+            // If already absolute, return as-is
             if (Uri.TryCreate(url, UriKind.Absolute, out var absoluteUri))
                 return absoluteUri.ToString();
 
+            // Handle protocol-relative URLs
             if (url.StartsWith("//"))
                 return baseUri.Scheme + ":" + url;
 
+            // Handle root-relative URLs
             if (url.StartsWith("/"))
                 return baseUri.ToString().TrimEnd('/') + url;
 
-            var currentUri = new Uri(currentUrl);
-            var currentBase = currentUri.ToString().Substring(0, currentUri.ToString().LastIndexOf('/') + 1);
-            return currentBase + url;
+            try
+            {
+                // Handle relative URLs properly using Uri constructor
+                var currentUri = new Uri(currentUrl);
+                var resolvedUri = new Uri(currentUri, url);
+                return resolvedUri.ToString();
+            }
+            catch (UriFormatException)
+            {
+                // Fallback to old method if URI creation fails
+                try
+                {
+                    var currentUri = new Uri(currentUrl);
+                    var currentBase = currentUri.ToString().Substring(0, currentUri.ToString().LastIndexOf('/') + 1);
+                    return currentBase + url;
+                }
+                catch
+                {
+                    // Last resort - return as-is
+                    return url;
+                }
+            }
         }
 
         private bool ShouldDownload(string url, Uri baseUri)

@@ -32,6 +32,8 @@ namespace advgenofflinewebdownloader
         public IMainPageService _mainPageService;
         public MainWindowViewModel _mainWindowView;
         private string _currentProjectFilePath;
+        private string _currentDownloadFolder;
+        private const int MAX_LOG_MESSAGES = 1000; // Limit UI log messages
         
         public MainWindowViewModel ViewModel => _mainWindowView;
         public MainWindow(IMainPageService mainPageService,MainWindowViewModel mainWindowViewModel)
@@ -48,24 +50,73 @@ namespace advgenofflinewebdownloader
                 // Sync ViewModel changes to service
                 _mainWindowView.UpdateCurrentProject();
                 
-                lstMessage.Items.Add("Starting download...");
+                var startMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Starting download...";
+                lstMessage.Items.Add(startMessage);
+                WriteToLogFile(startMessage);
+                
+                // Subscribe to download service events to show status in UI
+                if (_mainPageService is MaingPageService service)
+                {
+                    service.fileDownloadService.StatusChanged += (s, args) =>
+                    {
+                        // Use Dispatcher to update UI from background thread
+                        this.DispatcherQueue.TryEnqueue(() =>
+                        {
+                            var logMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{(args.IsError ? "ERROR" : "INFO")}] {args.Status}";
+                            
+                            // Limit UI messages to prevent memory issues
+                            if (lstMessage.Items.Count >= MAX_LOG_MESSAGES)
+                            {
+                                lstMessage.Items.RemoveAt(0); // Remove oldest message
+                            }
+                            lstMessage.Items.Add(logMessage);
+                            
+                            // Extract download folder from status messages
+                            if (args.Status.Contains("Download folder created:"))
+                            {
+                                var parts = args.Status.Split(':');
+                                if (parts.Length > 1)
+                                {
+                                    _currentDownloadFolder = string.Join(":", parts.Skip(1)).Trim();
+                                }
+                            }
+                            
+                            // Also write to log file (with infinite loop protection)
+                            WriteToLogFile(logMessage);
+                        });
+                    };
+                }
                 
                 var result = await _mainPageService.Download();
                 
                 if (result.Success)
                 {
-                    lstMessage.Items.Add($"Download completed: {result.TotalFilesDownloaded} files downloaded");
-                    lstMessage.Items.Add($"Download folder: {result.DownloadFolder}");
-                    lstMessage.Items.Add($"Duration: {result.Duration}");
+                    _currentDownloadFolder = result.DownloadFolder;
+                    
+                    var completedMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Download completed: {result.TotalFilesDownloaded} files downloaded";
+                    var folderMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Download folder: {result.DownloadFolder}";
+                    var durationMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Duration: {result.Duration}";
+                    
+                    lstMessage.Items.Add(completedMessage);
+                    lstMessage.Items.Add(folderMessage);
+                    lstMessage.Items.Add(durationMessage);
+                    
+                    WriteToLogFile(completedMessage);
+                    WriteToLogFile(folderMessage);
+                    WriteToLogFile(durationMessage);
                 }
                 else
                 {
-                    lstMessage.Items.Add($"Download failed: {result.ErrorMessage}");
+                    var errorMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Download failed: {result.ErrorMessage}";
+                    lstMessage.Items.Add(errorMessage);
+                    WriteToLogFile(errorMessage);
                 }
             }
             catch (Exception ex)
             {
-                lstMessage.Items.Add($"Error: {ex.Message}");
+                var errorMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Error: {ex.Message}";
+                lstMessage.Items.Add(errorMessage);
+                WriteToLogFile(errorMessage);
             }
         }
 
@@ -240,6 +291,92 @@ namespace advgenofflinewebdownloader
                 // Add to message list
                 lstMessage.Items.Add($"Download folder set to: {folder.Path}");
             }
+        }
+
+        private static readonly object _logFileLock = new object();
+        private static bool _isWritingToLog = false;
+
+        private void WriteToLogFile(string logMessage)
+        {
+            // Prevent infinite loops by checking if we're already writing to log
+            if (_isWritingToLog)
+                return;
+
+            lock (_logFileLock)
+            {
+                if (_isWritingToLog)
+                    return;
+
+                _isWritingToLog = true;
+                try
+                {
+                    // Use download folder if available, otherwise use current directory
+                    var logDirectory = !string.IsNullOrEmpty(_currentDownloadFolder) 
+                        ? _currentDownloadFolder 
+                        : Directory.GetCurrentDirectory();
+                        
+                    var logFilePath = Path.Combine(logDirectory, "log.txt");
+                    
+                    // Ensure directory exists
+                    Directory.CreateDirectory(Path.GetDirectoryName(logFilePath));
+                    
+                    File.AppendAllText(logFilePath, logMessage + Environment.NewLine);
+                }
+                catch (Exception ex)
+                {
+                    // Silently ignore log file write errors to avoid infinite loops
+                    // Don't call any logging methods here!
+                    System.Diagnostics.Debug.WriteLine($"Failed to write to log file: {ex.Message}");
+                }
+                finally
+                {
+                    _isWritingToLog = false;
+                }
+            }
+        }
+
+        private void ExportLogsToFile()
+        {
+            try
+            {
+                // Use download folder if available, otherwise use current directory
+                var logDirectory = !string.IsNullOrEmpty(_currentDownloadFolder) 
+                    ? _currentDownloadFolder 
+                    : Directory.GetCurrentDirectory();
+                    
+                var logFilePath = Path.Combine(logDirectory, "log.txt");
+                var allLogs = new List<string>();
+                
+                // Add header with timestamp
+                allLogs.Add($"=== Log Export - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+                allLogs.Add("");
+                
+                // Export all messages from the UI list
+                foreach (var item in lstMessage.Items)
+                {
+                    allLogs.Add(item.ToString());
+                }
+                
+                // Write all logs to file
+                File.WriteAllLines(logFilePath, allLogs);
+                
+                lstMessage.Items.Add($"Logs exported to: {logFilePath}");
+            }
+            catch (Exception ex)
+            {
+                lstMessage.Items.Add($"Failed to export logs: {ex.Message}");
+            }
+        }
+
+        private void ExportLogsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ExportLogsToFile();
+        }
+
+        private void ClearLogsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            lstMessage.Items.Clear();
+            lstMessage.Items.Add("Logs cleared");
         }
     }
 }
