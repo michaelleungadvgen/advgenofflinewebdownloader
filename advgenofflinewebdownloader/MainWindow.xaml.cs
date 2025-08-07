@@ -28,7 +28,6 @@ namespace advgenofflinewebdownloader
     /// </summary>
     public sealed partial class MainWindow : Window
     {
-
         public IMainPageService _mainPageService;
         public MainWindowViewModel _mainWindowView;
         private string _currentProjectFilePath;
@@ -36,6 +35,7 @@ namespace advgenofflinewebdownloader
         private const int MAX_LOG_MESSAGES = 1000; // Limit UI log messages
         
         public MainWindowViewModel ViewModel => _mainWindowView;
+        
         public MainWindow(IMainPageService mainPageService,MainWindowViewModel mainWindowViewModel)
         {
             _mainPageService = mainPageService;
@@ -47,8 +47,31 @@ namespace advgenofflinewebdownloader
         {
             try
             {
+                // Manually sync TextBox values to ViewModel (WinUI 3 x:Bind issue workaround)
+                if (_mainWindowView.CurrentProject != null)
+                {
+                    _mainWindowView.CurrentProject.Name = txtName.Text ?? "";
+                    _mainWindowView.CurrentProject.URL = txtURL.Text ?? "";
+                    _mainWindowView.CurrentProject.DownloadPath = _currentDownloadFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                }
+                
                 // Sync ViewModel changes to service
                 _mainWindowView.UpdateCurrentProject();
+                
+                // Debug: Check current project status
+                var currentProject = _mainPageService.GetCurrentProject();
+                var debugMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [DEBUG] Project Name: '{currentProject?.Name ?? "NULL"}', URL: '{currentProject?.URL ?? "NULL"}'";
+                lstMessage.Items.Add(debugMessage);
+                WriteToLogFile(debugMessage);
+                
+                // Validate URL before proceeding
+                if (string.IsNullOrEmpty(currentProject?.URL))
+                {
+                    var errorMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Please enter a valid website URL";
+                    lstMessage.Items.Add(errorMessage);
+                    WriteToLogFile(errorMessage);
+                    return;
+                }
                 
                 var startMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Starting download...";
                 lstMessage.Items.Add(startMessage);
@@ -122,261 +145,209 @@ namespace advgenofflinewebdownloader
 
         private async void OpenMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            var fileOpenPicker = new FileOpenPicker();
-            
-            // Initialize file picker
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            WinRT.Interop.InitializeWithWindow.Initialize(fileOpenPicker, hWnd);
-            
-            // Add file types
-            fileOpenPicker.FileTypeFilter.Add(".json");
-            
-            // Open file picker
-            StorageFile file = await fileOpenPicker.PickSingleFileAsync();
-            
-            if (file != null)
+            try
             {
-                // Load project from JSON
-                var websiteDto = await _mainPageService.LoadProject(file);
-                
-                if (websiteDto != null)
+                var picker = new FileOpenPicker();
+                picker.FileTypeFilter.Add(".json");
+                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+                var file = await picker.PickSingleFileAsync();
+                if (file != null)
                 {
-                    // Update ViewModel with project data
-                    var project = _mainPageService.GetCurrentProject();
-                    _mainWindowView.CurrentProject = project;
                     _currentProjectFilePath = file.Path;
+                    lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Loading project from: {file.Path}");
                     
-                    // Add to message list
-                    lstMessage.Items.Add($"Project loaded: {file.Path}");
-                }
-                else
-                {
-                    lstMessage.Items.Add($"Failed to load project: {file.Path}");
-                }
-            }
-        }
-
-        // Add this method to the MainWindow class
-        private async void SaveAsMenuItem_Click(object sender, RoutedEventArgs e)
-        {
-            var savePicker = new FileSavePicker();
-
-            // Initialize file picker
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
-
-            // Configure save picker
-            savePicker.FileTypeChoices.Add("JON file", new List<string>() { ".json" });
-        
-            // Open file picker
-            StorageFile file = await savePicker.PickSaveFileAsync();
-
-            if (file != null)
-            {
-                try
-                {
-                    // Sync ViewModel changes to service
-                    _mainWindowView.UpdateCurrentProject();
-                    
-                    // Get current project from service
-                    var currentProject = _mainPageService.GetCurrentProject();
-                    if (currentProject == null)
+                    var websiteDto = await _mainPageService.LoadProject(file);
+                    if (websiteDto != null)
                     {
-                        // Create new project if none exists
-                        currentProject = new Project
+                        // Update ViewModel with loaded project data (service -> ViewModel sync)
+                        var loadedProject = _mainPageService.GetCurrentProject();
+                        
+                        if (loadedProject != null && (!string.IsNullOrEmpty(loadedProject.Name) || !string.IsNullOrEmpty(loadedProject.URL)))
                         {
-                            Name = _mainWindowView.ProjectName,
-                            URL = _mainWindowView.ProjectURL,
-                            DownloadPath = _mainWindowView.ProjectDownloadPath,
-                            Logs = new List<string>()
-                        };
-                        _mainPageService.SetCurrentProject(currentProject);
-                    }
-
-                    // Save using MainPageService
-                    bool success = _mainPageService.SaveProjectAs(file.Path, currentProject);
-                    if (success)
-                    {
-                        _currentProjectFilePath = file.Path;
-                        lstMessage.Items.Add($"Project saved: {file.Path}");
+                            _mainWindowView.CurrentProject = loadedProject;
+                            
+                            // Force UI to update TextBoxes with loaded data
+                            txtName.Text = loadedProject.Name ?? "";
+                            txtURL.Text = loadedProject.URL ?? "";
+                            _currentDownloadFolder = loadedProject.DownloadPath;
+                            
+                            lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Project loaded successfully");
+                            lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [DEBUG] Name: '{loadedProject.Name}', URL: '{loadedProject.URL}', Path: '{loadedProject.DownloadPath}'");
+                        }
+                        else
+                        {
+                            lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Project file appears to be empty or invalid");
+                        }
                     }
                     else
                     {
-                        lstMessage.Items.Add("Failed to save project.");
+                        lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Failed to load project: Invalid JSON format or file read error");
                     }
                 }
-                catch (Exception ex)
-                {
-                    lstMessage.Items.Add($"Error saving project: {ex.Message}");
-                }
+            }
+            catch (Exception ex)
+            {
+                lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Error loading project: {ex.Message}");
             }
         }
 
         private async void SaveMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_currentProjectFilePath))
-            {
-                // If no file path, use Save As instead
-                SaveAsMenuItem_Click(sender, e);
-                return;
-            }
-
             try
             {
-                // Sync ViewModel changes to service
-                _mainWindowView.UpdateCurrentProject();
-                
-                // Get current project from service
-                var currentProject = _mainPageService.GetCurrentProject();
-                if (currentProject == null)
+                if (!string.IsNullOrEmpty(_currentProjectFilePath))
                 {
-                    lstMessage.Items.Add("No project to save.");
-                    return;
-                }
-
-                // Save using MainPageService
-                bool success = _mainPageService.SaveProject(_currentProjectFilePath);
-                if (success)
-                {
-                    lstMessage.Items.Add($"Project saved: {_currentProjectFilePath}");
+                    _mainWindowView.UpdateCurrentProject();
+                    if (_mainPageService.SaveProject(_currentProjectFilePath))
+                    {
+                        lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Project saved: {_currentProjectFilePath}");
+                    }
+                    else
+                    {
+                        lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Failed to save project");
+                    }
                 }
                 else
                 {
-                    lstMessage.Items.Add("Failed to save project.");
+                    SaveAsMenuItem_Click(sender, e);
                 }
             }
             catch (Exception ex)
             {
-                lstMessage.Items.Add($"Error saving project: {ex.Message}");
+                lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Error saving project: {ex.Message}");
+            }
+        }
+
+        private async void SaveAsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var picker = new FileSavePicker();
+                picker.FileTypeChoices.Add("JSON Files", new List<string>() { ".json" });
+                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+                picker.SuggestedFileName = "website_project.json";
+
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+                var file = await picker.PickSaveFileAsync();
+                if (file != null)
+                {
+                    _currentProjectFilePath = file.Path;
+                    _mainWindowView.UpdateCurrentProject();
+                    if (_mainPageService.SaveProjectAs(file.Path, _mainPageService.GetCurrentProject()))
+                    {
+                        lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Project saved as: {file.Path}");
+                    }
+                    else
+                    {
+                        lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Failed to save project");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Error saving project: {ex.Message}");
             }
         }
 
         private async void btnFolder_Click(object sender, RoutedEventArgs e)
         {
-            var folderPicker = new FolderPicker();
-            
-            // Initialize folder picker
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hWnd);
-            
-            // Configure folder picker
-            folderPicker.SuggestedStartLocation = PickerLocationId.Desktop;
-            folderPicker.FileTypeFilter.Add("*");
-            
-            // Open folder picker
-            StorageFolder folder = await folderPicker.PickSingleFolderAsync();
-            
-            if (folder != null)
-            {
-                // Get or create current project
-                var currentProject = _mainPageService.GetCurrentProject();
-                if (currentProject == null)
-                {
-                    // Create a new project if none exists
-                    currentProject = new Project();
-                    _mainPageService.SetCurrentProject(currentProject);
-                    _mainWindowView.CurrentProject = currentProject;
-                }
-                
-                // Update project's download path
-                currentProject.DownloadPath = folder.Path;
-                _mainPageService.SetCurrentProject(currentProject);
-                
-                // Update ViewModel to reflect changes
-                _mainWindowView.CurrentProject = currentProject;
-                
-                // Update button text to show selected folder
-                btnFolder.Content = $"Selected: {folder.Name}";
-                
-                // Add to message list
-                lstMessage.Items.Add($"Download folder set to: {folder.Path}");
-            }
-        }
-
-        private static readonly object _logFileLock = new object();
-        private static bool _isWritingToLog = false;
-
-        private void WriteToLogFile(string logMessage)
-        {
-            // Prevent infinite loops by checking if we're already writing to log
-            if (_isWritingToLog)
-                return;
-
-            lock (_logFileLock)
-            {
-                if (_isWritingToLog)
-                    return;
-
-                _isWritingToLog = true;
-                try
-                {
-                    // Use download folder if available, otherwise use current directory
-                    var logDirectory = !string.IsNullOrEmpty(_currentDownloadFolder) 
-                        ? _currentDownloadFolder 
-                        : Directory.GetCurrentDirectory();
-                        
-                    var logFilePath = Path.Combine(logDirectory, "log.txt");
-                    
-                    // Ensure directory exists
-                    Directory.CreateDirectory(Path.GetDirectoryName(logFilePath));
-                    
-                    File.AppendAllText(logFilePath, logMessage + Environment.NewLine);
-                }
-                catch (Exception ex)
-                {
-                    // Silently ignore log file write errors to avoid infinite loops
-                    // Don't call any logging methods here!
-                    System.Diagnostics.Debug.WriteLine($"Failed to write to log file: {ex.Message}");
-                }
-                finally
-                {
-                    _isWritingToLog = false;
-                }
-            }
-        }
-
-        private void ExportLogsToFile()
-        {
             try
             {
-                // Use download folder if available, otherwise use current directory
-                var logDirectory = !string.IsNullOrEmpty(_currentDownloadFolder) 
-                    ? _currentDownloadFolder 
-                    : Directory.GetCurrentDirectory();
-                    
-                var logFilePath = Path.Combine(logDirectory, "log.txt");
-                var allLogs = new List<string>();
-                
-                // Add header with timestamp
-                allLogs.Add($"=== Log Export - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
-                allLogs.Add("");
-                
-                // Export all messages from the UI list
-                foreach (var item in lstMessage.Items)
+                var picker = new FolderPicker();
+                picker.FileTypeFilter.Add("*");
+                picker.SuggestedStartLocation = PickerLocationId.Desktop;
+
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+                var folder = await picker.PickSingleFolderAsync();
+                if (folder != null)
                 {
-                    allLogs.Add(item.ToString());
+                    _currentDownloadFolder = folder.Path;
+                    lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Download folder set: {folder.Path}");
                 }
-                
-                // Write all logs to file
-                File.WriteAllLines(logFilePath, allLogs);
-                
-                lstMessage.Items.Add($"Logs exported to: {logFilePath}");
             }
             catch (Exception ex)
             {
-                lstMessage.Items.Add($"Failed to export logs: {ex.Message}");
+                lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Error selecting folder: {ex.Message}");
             }
         }
 
-        private void ExportLogsMenuItem_Click(object sender, RoutedEventArgs e)
+        private async void ExportLogsMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            ExportLogsToFile();
+            try
+            {
+                var picker = new FileSavePicker();
+                picker.FileTypeChoices.Add("Text Files", new List<string>() { ".txt" });
+                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+                picker.SuggestedFileName = $"download_logs_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+                var file = await picker.PickSaveFileAsync();
+                if (file != null)
+                {
+                    var logs = new List<string>();
+                    foreach (var item in lstMessage.Items)
+                    {
+                        logs.Add(item.ToString());
+                    }
+                    await File.WriteAllLinesAsync(file.Path, logs);
+                    
+                    lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Logs exported to: {file.Path}");
+                }
+            }
+            catch (Exception ex)
+            {
+                lstMessage.Items.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Error exporting logs: {ex.Message}");
+            }
         }
 
         private void ClearLogsMenuItem_Click(object sender, RoutedEventArgs e)
         {
             lstMessage.Items.Clear();
-            lstMessage.Items.Add("Logs cleared");
+        }
+
+        // Thread-safe log file writing with infinite loop protection
+        private readonly object _logFileLock = new object();
+        private volatile bool _isWritingToLog = false;
+
+        private void WriteToLogFile(string message)
+        {
+            if (_isWritingToLog)
+                return; // Prevent recursive calls
+
+            try
+            {
+                lock (_logFileLock)
+                {
+                    if (_isWritingToLog)
+                        return; // Double-check after acquiring lock
+
+                    _isWritingToLog = true;
+
+                    if (!string.IsNullOrEmpty(_currentDownloadFolder))
+                    {
+                        var logFilePath = Path.Combine(_currentDownloadFolder, "download_log.txt");
+                        File.AppendAllText(logFilePath, message + Environment.NewLine);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Silently ignore log file errors to prevent infinite loops
+            }
+            finally
+            {
+                _isWritingToLog = false;
+            }
         }
     }
 }

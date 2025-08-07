@@ -51,7 +51,7 @@ namespace advgenofflinewebdownloader.Services
 
                 var result = await fileDownloadService.DownloadWebsiteAsync(
                     currentProject.URL, 
-                    depth: 999999, 
+                    depth: 2, 
                     downloadPath);
 
                 if (result.Success)
@@ -78,15 +78,24 @@ namespace advgenofflinewebdownloader.Services
             {
                 currentProject = projectRepository.LoadProject(file.Path);
                 
-                return new WebsiteDTO
+                if (currentProject != null)
                 {
-                    URL = currentProject.URL,
-                    FileUrls = new List<string>(),
-                    Content = currentProject.Name
-                };
+                    return new WebsiteDTO
+                    {
+                        URL = currentProject.URL,
+                        FileUrls = new List<string>(),
+                        Content = currentProject.Name
+                    };
+                }
+                else
+                {
+                    return null;
+                }
             }
             catch (Exception ex)
             {
+                // Log the actual error for debugging
+                System.Diagnostics.Debug.WriteLine($"Error loading project: {ex.Message}");
                 return null;
             }
         }

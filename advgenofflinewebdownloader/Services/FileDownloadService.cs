@@ -22,6 +22,7 @@ using System.Net.Http;
 {
         private readonly HttpClient _httpClient;
         private readonly HashSet<string> _downloadedUrls;
+        private readonly HashSet<string> _processingUrls; // Track URLs currently being processed to prevent loops
         private CancellationTokenSource _cancellationTokenSource;
         private string _baseUrl;
         private string _hostName;
@@ -44,6 +45,7 @@ using System.Net.Http;
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
             _downloadedUrls = new HashSet<string>();
+            _processingUrls = new HashSet<string>();
         }
 
         public async Task<DownloadResult> DownloadWebsiteAsync(string url, int depth, string baseFolder)
@@ -65,6 +67,7 @@ using System.Net.Http;
                 _baseUrl = url;
                 _hostName = uri.Host;
                 _downloadedUrls.Clear();
+                _processingUrls.Clear();
                 _totalFiles = 0;
                 _downloadedFiles = 0;
 
@@ -130,8 +133,20 @@ using System.Net.Http;
             lock (_lockObject)
             {
                 if (_downloadedUrls.Contains(url) || depth < 0)
+                {
+                    OnStatusChanged($"URL already processed or max depth reached: {url}", false);
                     return;
+                }
+                
+                if (_processingUrls.Contains(url))
+                {
+                    OnStatusChanged($"LOOP DETECTED: Skipping already processing URL: {url}", true);
+                    return;
+                }
+                
                 _downloadedUrls.Add(url);
+                _processingUrls.Add(url);
+                OnStatusChanged($"Starting to process: {url} (depth: {depth})", false);
             }
 
             try
@@ -210,6 +225,14 @@ using System.Net.Http;
             catch (Exception ex)
             {     
                 OnStatusChanged($"Error downloading {url}: {ex.Message}", true);
+            }
+            finally
+            {
+                // Remove from processing set when done
+                lock (_lockObject)
+                {
+                    _processingUrls.Remove(url);
+                }
             }
         }
 
@@ -568,6 +591,13 @@ using System.Net.Http;
 
                         var absoluteUrl = GetAbsoluteUrl(resourceUrl, currentUrl, baseUri);
                         var isPage = isPagePattern && !IsAssetFile(absoluteUrl);
+                        
+                        // Force CSS files to be treated as resources, not pages, to prevent infinite loops
+                        if (absoluteUrl.Contains(".css", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isPage = false;
+                            OnStatusChanged($"Forcing CSS file to be treated as resource: {absoluteUrl}", false);
+                        }
                         if (absoluteUrl.Contains("woff"))
                         {
                             Console.WriteLine(absoluteUrl);
@@ -592,31 +622,71 @@ using System.Net.Http;
 
             lock (_lockObject)
             {
-                if (_downloadedUrls.Contains(url))
+                if (_downloadedUrls.Contains(url) || _processingUrls.Contains(url))
+                {
+                    if (_processingUrls.Contains(url))
+                    {
+                        OnStatusChanged($"RESOURCE LOOP DETECTED: Skipping already processing URL: {url}", true);
+                    }
                     return;
+                }
                 _downloadedUrls.Add(url);
+                _processingUrls.Add(url);
             }
 
             try
             {
-                OnStatusChanged($"Downloading resource: {Path.GetFileName(url)}", false);
+                var fileName = GetFileNameFromUrl(url);
+                OnStatusChanged($"Downloading resource: {fileName}", false);
 
                 var response = await _httpClient.GetAsync(url, cancellationToken);
                 if (!response.IsSuccessStatusCode)
+                {
+                    OnStatusChanged($"Failed to download resource: {url} (Status: {response.StatusCode})", true);
                     return;
+                }
 
-                var fileName = GetFileNameFromUrl(url);
+                var content = await response.Content.ReadAsStringAsync();
+                var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+
+                // Check if this is a CSS file that needs processing
+                var isCssFile = url.Contains(".css", StringComparison.OrdinalIgnoreCase) || 
+                               contentType.Contains("text/css") || 
+                               contentType.Contains("application/css") ||
+                               content.Contains("@font-face") || content.Contains("url(") || content.Contains("@import");
+
                 var filePath = Path.Combine(_downloadFolder, relativePath, fileName);
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
 
-                var bytes = await response.Content.ReadAsByteArrayAsync();
-                await File.WriteAllBytesAsync(filePath, bytes, cancellationToken);
+                if (isCssFile)
+                {
+                    OnStatusChanged($"Processing CSS resource: {fileName}", false);
+                    
+                    // Process CSS content to download its resources
+                    var processedContent = await ProcessCssContent(content, url, relativePath, cancellationToken);
+                    await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
+                }
+                else
+                {
+                    // Save binary content for non-CSS resources
+                    var bytes = await response.Content.ReadAsByteArrayAsync();
+                    await File.WriteAllBytesAsync(filePath, bytes, cancellationToken);
+                }
 
                 IncrementProgress(fileName);
             }
             catch (Exception ex)
             {
+                OnStatusChanged($"Error downloading resource {url}: {ex.Message}", true);
                 Debug.WriteLine($"Error downloading resource {url}: {ex.Message}");
+            }
+            finally
+            {
+                // Remove from processing set when done
+                lock (_lockObject)
+                {
+                    _processingUrls.Remove(url);
+                }
             }
         }
 

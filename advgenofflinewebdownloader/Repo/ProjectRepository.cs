@@ -24,15 +24,40 @@ namespace advgenofflinewebdownloader.Repo
 
       public Project LoadProject(string file)
       {
-         // Load the project from a file
-         if (!File.Exists(file))
+         try
          {
+            // Load the project from a file
+            if (!File.Exists(file))
+            {
+               System.Diagnostics.Debug.WriteLine($"Project file not found: {file}");
+               return new Project();
+            }
+            
+            using (StreamReader reader = new StreamReader(file))
+            {
+               string json = reader.ReadToEnd();
+               System.Diagnostics.Debug.WriteLine($"Loading project JSON: {json}");
+               
+               if (string.IsNullOrWhiteSpace(json))
+               {
+                  System.Diagnostics.Debug.WriteLine("Empty JSON content");
+                  return new Project();
+               }
+               
+               var project = JsonConvert.DeserializeObject<Project>(json);
+               System.Diagnostics.Debug.WriteLine($"Loaded project - Name: '{project?.Name}', URL: '{project?.URL}'");
+               return project ?? new Project();
+            }
+         }
+         catch (JsonException ex)
+         {
+            System.Diagnostics.Debug.WriteLine($"JSON deserialization error: {ex.Message}");
             return new Project();
          }
-         using (StreamReader reader = new StreamReader(file))
+         catch (Exception ex)
          {
-            string json = reader.ReadToEnd();
-            return JsonConvert.DeserializeObject<Project>(json);
+            System.Diagnostics.Debug.WriteLine($"Error loading project file: {ex.Message}");
+            return new Project();
          }
       }
    }
