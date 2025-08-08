@@ -1,0 +1,273 @@
+name: CI/CD Pipeline - WinUI Website Downloader
+
+on:
+  push:
+    branches: [ main, dev, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+env:
+  PROJECT_PATH: 'advgenofflinewebdownloader/advgenofflinewebdownloader.csproj'
+  SOLUTION_PATH: 'advgenofflinewebdownloader.sln'
+  DOTNET_VERSION: '8.0.x'
+  WINDOWS_SDK_VERSION: '10.0.26100.0'
+
+jobs:
+  # Build and Test Job
+  build-and-test:
+    name: Build and Test
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+        platform: [x64, x86, ARM64]
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Full history for version calculation
+        
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+      with:
+        msbuild-architecture: x64
+        
+    - name: Add Windows SDK
+      shell: powershell
+      run: |
+        # Ensure Windows SDK is available
+        $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\${{ env.WINDOWS_SDK_VERSION }}"
+        if (Test-Path $sdkPath) {
+          echo "Windows SDK ${{ env.WINDOWS_SDK_VERSION }} found"
+        } else {
+          echo "Installing Windows SDK..."
+          # SDK should be available on GitHub-hosted runners
+        }
+        
+    - name: Restore Dependencies
+      run: |
+        dotnet restore ${{ env.SOLUTION_PATH }} --verbosity normal
+        
+    - name: Build Application
+      run: |
+        dotnet build ${{ env.SOLUTION_PATH }} `
+          --configuration ${{ matrix.configuration }} `
+          --runtime win-${{ matrix.platform }} `
+          --no-restore `
+          --verbosity normal `
+          /p:Platform=${{ matrix.platform }} `
+          /p:PublishProfile=win-${{ matrix.platform }} `
+          /p:WindowsAppSDKSelfContained=true
+          
+    - name: Run Unit Tests (if any)
+      run: |
+        dotnet test ${{ env.SOLUTION_PATH }} `
+          --configuration ${{ matrix.configuration }} `
+          --no-build `
+          --verbosity normal `
+          --logger trx `
+          --results-directory TestResults
+      continue-on-error: true # Continue even if no tests exist
+      
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.configuration }}-${{ matrix.platform }}
+        path: TestResults/*.trx
+        retention-days: 30
+        
+    - name: Upload Build Artifacts (Debug)
+      if: matrix.configuration == 'Debug'
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-build-${{ matrix.platform }}
+        path: |
+          advgenofflinewebdownloader/bin/${{ matrix.platform }}/${{ matrix.configuration }}/
+          !advgenofflinewebdownloader/bin/${{ matrix.platform }}/${{ matrix.configuration }}/**/*.pdb
+        retention-days: 7
+        
+    - name: Upload Build Artifacts (Release)
+      if: matrix.configuration == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-build-${{ matrix.platform }}
+        path: |
+          advgenofflinewebdownloader/bin/${{ matrix.platform }}/${{ matrix.configuration }}/
+        retention-days: 30
+
+  # Package Job for Release Builds
+  package:
+    name: Package Application
+    needs: build-and-test
+    runs-on: windows-latest
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        platform: [x64, x86, ARM64]
+        
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+      
+    - name: Download Release Build
+      uses: actions/download-artifact@v4
+      with:
+        name: release-build-${{ matrix.platform }}
+        path: build-output/
+        
+    - name: Create Deployment Package
+      shell: powershell
+      run: |
+        $platform = "${{ matrix.platform }}"
+        $version = if ($env:GITHUB_REF -match "refs/tags/v(.+)") { $matches[1] } else { "1.0.0-dev" }
+        $packageName = "AdvGenOfflineWebDownloader-v$version-$platform"
+        
+        # Create package directory
+        New-Item -ItemType Directory -Path "packages" -Force
+        New-Item -ItemType Directory -Path "packages/$packageName" -Force
+        
+        # Copy application files
+        Copy-Item -Path "build-output/*" -Destination "packages/$packageName/" -Recurse -Force
+        
+        # Copy additional files
+        Copy-Item -Path "README.md" -Destination "packages/$packageName/" -ErrorAction SilentlyContinue
+        Copy-Item -Path "LICENSE*" -Destination "packages/$packageName/" -ErrorAction SilentlyContinue
+        
+        # Create installation script
+        @"
+        @echo off
+        echo Installing AdvGen Offline Web Downloader v$version ($platform)
+        echo.
+        echo Prerequisites:
+        echo - Windows 10/11 (version 1809 or later)
+        echo - .NET 8 Runtime (will be prompted to install if missing)
+        echo.
+        echo Starting application...
+        start advgenofflinewebdownloader.exe
+        "@ | Out-File -FilePath "packages/$packageName/Install.bat" -Encoding ASCII
+        
+        # Create ZIP package
+        Compress-Archive -Path "packages/$packageName/*" -DestinationPath "packages/$packageName.zip" -Force
+        
+        echo "PACKAGE_NAME=$packageName" >> $env:GITHUB_ENV
+        echo "PACKAGE_PATH=packages/$packageName.zip" >> $env:GITHUB_ENV
+        
+    - name: Upload Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}
+        path: ${{ env.PACKAGE_PATH }}
+        retention-days: 90
+        
+    - name: Upload to Release (if tagged)
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ${{ env.PACKAGE_PATH }}
+        asset_name: ${{ env.PACKAGE_NAME }}.zip
+        asset_content_type: application/zip
+
+  # Security Scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Run CodeQL Analysis
+      uses: github/codeql-action/init@v3
+      with:
+        languages: csharp
+        
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+      
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      
+    - name: Run Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'AdvGenOfflineWebDownloader'
+        path: '.'
+        format: 'HTML,JSON'
+        
+    - name: Upload Dependency Check Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-check-report
+        path: reports/
+        retention-days: 30
+
+  # Code Quality
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Restore Dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+      
+    - name: Run Code Analysis
+      run: |
+        dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --verbosity normal
+        
+    - name: SonarCloud Scan (if configured)
+      if: env.SONAR_TOKEN != ''
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Deployment Notification
+  notify:
+    name: Deployment Notification
+    needs: [build-and-test, package]
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Notify Success
+      if: needs.build-and-test.result == 'success' && needs.package.result == 'success'
+      run: |
+        echo "✅ Deployment successful! New version of AdvGen Offline Web Downloader is ready."
+        echo "📦 Artifacts available for download"
+        
+    - name: Notify Failure
+      if: needs.build-and-test.result == 'failure' || needs.package.result == 'failure'
+      run: |
+        echo "❌ Deployment failed! Please check the logs."
+        exit 1

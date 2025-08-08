@@ -9,77 +9,300 @@
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
 
     mc:Ignorable="d">
- <!-- Generate a grid with top menu bar -->
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+    
+    <Grid Background="#f8fafb">
+        <Grid.Resources>
+            <!-- Modern Color Resources -->
+            <SolidColorBrush x:Key="AppBackgroundBrush" Color="#f8fafb"/>
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#ffffff"/>
+            <SolidColorBrush x:Key="BorderBrush" Color="#e2e8f0"/>
+            <SolidColorBrush x:Key="PrimaryBrush" Color="#3b82f6"/>
+            <SolidColorBrush x:Key="PrimaryLightBrush" Color="#dbeafe"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1e293b"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#64748b"/>
+            <SolidColorBrush x:Key="TextMutedBrush" Color="#94a3b8"/>
+            <SolidColorBrush x:Key="SuccessBrush" Color="#10b981"/>
+            <SolidColorBrush x:Key="WarningBrush" Color="#f59e0b"/>
+            <SolidColorBrush x:Key="ErrorBrush" Color="#ef4444"/>
             
+            <!-- Card Style -->
+            <Style x:Key="CardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="Padding" Value="20"/>
+            </Style>
+            
+            <!-- Modern Button Style -->
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="16,10"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            
+            <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="16,10"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            
+            <!-- Modern TextBox Style -->
+            <Style x:Key="ModernTextBoxStyle" TargetType="TextBox">
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="12,8"/>
+            </Style>
+            
+            <!-- Title Style -->
+            <Style x:Key="TitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            </Style>
+            
+            <!-- Label Style -->
+            <Style x:Key="LabelStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+            </Style>
+            
+            <!-- Modern MenuBar Style -->
+            <Style x:Key="ModernMenuBarStyle" TargetType="muxc:MenuBar">
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+            
+            <!-- Modern MenuBarItem Style -->
+            <Style x:Key="ModernMenuBarItemStyle" TargetType="muxc:MenuBarItem">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="Margin" Value="4,0"/>
+            </Style>
+            
+            <!-- Modern MenuFlyoutItem Style -->
+            <Style x:Key="ModernMenuFlyoutItemStyle" TargetType="MenuFlyoutItem">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Padding" Value="12,8"/>
+            </Style>
+        </Grid.Resources>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="60"/>
+            <RowDefinition Height="80"/>
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <muxc:MenuBar>
-            <muxc:MenuBarItem Title="File">
-                <MenuFlyoutSubItem Text="New">
+        
+        <!-- Title Bar -->
+        <Border Grid.Row="0" Background="{StaticResource CardBackgroundBrush}" 
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <TextBlock Text="Website Offline Downloader" 
+                          Style="{StaticResource TitleStyle}"
+                          VerticalAlignment="Center" 
+                          Margin="24,0"/>
+                
+                <!-- Menu Bar -->
+                <muxc:MenuBar HorizontalAlignment="Right" Margin="0,10,24,0" 
+                             Style="{StaticResource ModernMenuBarStyle}">
+                    <muxc:MenuBarItem Title="File" Style="{StaticResource ModernMenuBarItemStyle}">
+                        <MenuFlyoutItem Text="Open..." Click="OpenMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Save" Click="SaveMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Save As" Click="SaveAsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Exit" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                    </muxc:MenuBarItem>
+
+                    <muxc:MenuBarItem Title="Logs" Style="{StaticResource ModernMenuBarItemStyle}">
+                        <MenuFlyoutItem Text="Export to File" Click="ExportLogsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Clear All" Click="ClearLogsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                    </muxc:MenuBarItem>
+
+                    <muxc:MenuBarItem Title="Help" Style="{StaticResource ModernMenuBarItemStyle}">
+                        <MenuFlyoutItem Text="About" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                    </muxc:MenuBarItem>
+                </muxc:MenuBar>
+            </Grid>
+        </Border>
+        
+        <!-- Top Action Bar -->
+        <Border Grid.Row="1" Background="{StaticResource CardBackgroundBrush}" 
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="24,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
+                    <Button x:Name="downloadButton" 
+                            Content="Download Website" 
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Click="downloadButton_Click"/>
+                    <Button x:Name="btnFolder" 
+                            Content="Select Output Folder" 
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="btnFolder_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content Area -->
+        <ScrollViewer Grid.Row="2" Margin="24" ZoomMode="Disabled" 
+                      VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="400"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Left Column: Configuration -->
+                <StackPanel Grid.Column="0" Spacing="20">
                     
-                </MenuFlyoutSubItem>
-                <MenuFlyoutItem Text="Open..."/>
-                <MenuFlyoutItem Text="Save"/>
-                <MenuFlyoutItem Text="Save As"/>
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="Exit"/>
-            </muxc:MenuBarItem>
-
-            <muxc:MenuBarItem Title="Logs">
-                <MenuFlyoutItem Text="View"/>
-                <MenuFlyoutItem Text="Clear All"/>
-               
-            </muxc:MenuBarItem>
-
-            <muxc:MenuBarItem Title="View">
-                <MenuFlyoutItem Text="Output"/>
-                <MenuFlyoutSeparator/>
-                <muxc:RadioMenuFlyoutItem Text="Landscape" GroupName="OrientationGroup"/>
-                <muxc:RadioMenuFlyoutItem Text="Portrait" GroupName="OrientationGroup" IsChecked="True"/>
-                <MenuFlyoutSeparator/>
-                <muxc:RadioMenuFlyoutItem Text="Small icons" GroupName="SizeGroup"/>
-                <muxc:RadioMenuFlyoutItem Text="Medium icons" IsChecked="True" GroupName="SizeGroup"/>
-                <muxc:RadioMenuFlyoutItem Text="Large icons" GroupName="SizeGroup"/>
-            </muxc:MenuBarItem>
-
-            <muxc:MenuBarItem Title="Help">
-                <MenuFlyoutItem Text="About"/>
-            </muxc:MenuBarItem>
-        </muxc:MenuBar>
-
-        <!-- Form Gird with with Two Columns-->
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center"/>
-            <TextBox Grid.Column="1" x:Name="txtName" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="0" Grid.Row="1" Text="URL:" VerticalAlignment="Center"/>
-            <TextBox Grid.Column="1" Grid.Row="1" x:Name="txtURL" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="0" Grid.Row="2" Text="Folder" VerticalAlignment="Center"/>
-             <!-- Select a folder-->
-            <muxc:Button Grid.Column="1" Grid.Row="2" x:Name="btnFolder" Content="Select Folder" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="0" Grid.Row="3" Text="Thread Count" VerticalAlignment="Center"/>
-            <NumberBox Grid.Column="1" Grid.Row="3"  Name="numThreadCount" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="0" Grid.Row="4" Text="Message" VerticalAlignment="Center"/>
-            <ListBox Grid.Row="5" Grid.ColumnSpan="2"  x:Name="lstMessage" Margin="15" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"/>
-        </Grid>
-       
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="15">
-            <Button x:Name="myButton" Click="myButton_Click">Download</Button>
-        </StackPanel>
+                    <!-- Project Configuration Card -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Project Configuration" 
+                                      FontSize="18" FontWeight="SemiBold" 
+                                      Foreground="{StaticResource TextPrimaryBrush}"/>
+                            
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Project Name" Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="txtName" 
+                                        Text="{x:Bind ViewModel.ProjectName, Mode=TwoWay}" 
+                                        Style="{StaticResource ModernTextBoxStyle}"
+                                        PlaceholderText="Enter project name..."/>
+                            </StackPanel>
+                            
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Website URL" Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="txtURL" 
+                                        Text="{x:Bind ViewModel.ProjectURL, Mode=TwoWay}" 
+                                        Style="{StaticResource ModernTextBoxStyle}"
+                                        PlaceholderText="https://example.com"/>
+                            </StackPanel>
+                            
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Download Settings" Style="{StaticResource LabelStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <TextBlock Text="Max Threads:" 
+                                              VerticalAlignment="Center"
+                                              Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <NumberBox Name="numThreadCount" 
+                                              Width="80" Height="32"
+                                              Value="4" Minimum="1" Maximum="16"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Quick Stats Card -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Download Statistics" 
+                                      FontSize="18" FontWeight="SemiBold" 
+                                      Foreground="{StaticResource TextPrimaryBrush}"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <StackPanel Grid.Column="0" Grid.Row="0">
+                                    <TextBlock Text="0" FontSize="24" FontWeight="Bold" 
+                                              Foreground="{StaticResource PrimaryBrush}"/>
+                                    <TextBlock Text="Files Downloaded" 
+                                              FontSize="12" 
+                                              Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <StackPanel Grid.Column="1" Grid.Row="0">
+                                    <TextBlock Text="0%" FontSize="24" FontWeight="Bold" 
+                                              Foreground="{StaticResource SuccessBrush}"/>
+                                    <TextBlock Text="Progress" 
+                                              FontSize="12" 
+                                              Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <StackPanel Grid.Column="0" Grid.Row="1" Margin="0,12,0,0">
+                                    <TextBlock Text="Ready" FontSize="14" FontWeight="SemiBold" 
+                                              Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="Status" 
+                                              FontSize="12" 
+                                              Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <StackPanel Grid.Column="1" Grid.Row="1" Margin="0,12,0,0">
+                                    <TextBlock Text="0 MB" FontSize="14" FontWeight="SemiBold" 
+                                              Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="Downloaded" 
+                                              FontSize="12" 
+                                              Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    
+                </StackPanel>
+                
+                <!-- Right Column: Activity Log -->
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="20,0,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        
+                        <StackPanel Grid.Row="0" Spacing="8">
+                            <TextBlock Text="Download Activity" 
+                                      FontSize="18" FontWeight="SemiBold" 
+                                      Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Real-time status and progress information" 
+                                      FontSize="12" 
+                                      Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                        
+                        <Border Grid.Row="1" 
+                                Background="#f8fafb" 
+                                CornerRadius="8" 
+                                Margin="0,16,0,0"
+                                Padding="12">
+                            <ScrollViewer VerticalScrollMode="Auto" 
+                                         VerticalScrollBarVisibility="Auto"
+                                         ZoomMode="Disabled">
+                                <ListBox x:Name="lstMessage" 
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        SelectionMode="Single"
+                                        IsHitTestVisible="False">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="8,4"/>
+                                            <Setter Property="Margin" Value="0,2"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                </ListBox>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+        </ScrollViewer>
     </Grid>
 </Window>
