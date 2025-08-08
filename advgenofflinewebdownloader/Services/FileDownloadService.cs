@@ -24,11 +24,13 @@ using System.Net.Http;
         private readonly HashSet<string> _downloadedUrls;
         private readonly HashSet<string> _processingUrls; // Track URLs currently being processed to prevent loops
         private CancellationTokenSource _cancellationTokenSource;
+        private SemaphoreSlim _downloadSemaphore;
         private string _baseUrl;
         private string _hostName;
         private string _downloadFolder;
         private int _totalFiles;
         private int _downloadedFiles;
+        private int _maxThreads;
         private readonly object _lockObject = new object();
 
         public event EventHandler<DownloadProgressEventArgs> ProgressChanged;
@@ -48,10 +50,15 @@ using System.Net.Http;
             _processingUrls = new HashSet<string>();
         }
 
-        public async Task<DownloadResult> DownloadWebsiteAsync(string url, int depth, string baseFolder)
+        public async Task<DownloadResult> DownloadWebsiteAsync(string url, int depth, string baseFolder, int maxThreads = 4)
         {
             var stopwatch = Stopwatch.StartNew();
             _cancellationTokenSource = new CancellationTokenSource();
+            
+            // Initialize threading support
+            _maxThreads = Math.Max(1, Math.Min(maxThreads, 16)); // Clamp between 1 and 16
+            _downloadSemaphore?.Dispose(); // Clean up previous semaphore
+            _downloadSemaphore = new SemaphoreSlim(_maxThreads, _maxThreads);
 
             try
             {
@@ -77,7 +84,7 @@ using System.Net.Http;
                 Directory.CreateDirectory(_downloadFolder);
 
                 OnStatusChanged($"Download folder created: {_downloadFolder}", false);
-                OnStatusChanged("Starting download...", false);
+                OnStatusChanged($"Starting download with {_maxThreads} concurrent threads...", false);
 
                 await DownloadWebsiteRecursive(url, depth, "", _cancellationTokenSource.Token);
 
@@ -117,6 +124,7 @@ using System.Net.Http;
             {
                 stopwatch.Stop();
                 _cancellationTokenSource?.Dispose();
+                _downloadSemaphore?.Dispose();
             }
         }
 
@@ -254,7 +262,7 @@ using System.Net.Http;
                 OnStatusChanged($"CSS resource found in HTML: {cssRes.AbsoluteUrl}", false);
             }
 
-            // Download resources
+            // Download resources with thread control
             var downloadTasks = new List<Task>();
             foreach (var resource in resources.Distinct())
             {
@@ -266,19 +274,19 @@ using System.Net.Http;
                     if (resource.IsPage && depth > 0)
                     {
                         OnStatusChanged($"Recursively downloading page: {resource.AbsoluteUrl} (depth: {depth})", false);
-                        downloadTasks.Add(DownloadWebsiteRecursive(
+                        downloadTasks.Add(DownloadWithSemaphore(() => DownloadWebsiteRecursive(
                             resource.AbsoluteUrl,
                             depth - 1,
                             GetRelativePathForUrl(resource.AbsoluteUrl, baseUri),
-                            cancellationToken));
+                            cancellationToken), cancellationToken));
                     }
                     else if (!resource.IsPage)
                     {
                         OnStatusChanged($"Downloading resource: {resource.AbsoluteUrl}", false);
-                        downloadTasks.Add(DownloadResource(
+                        downloadTasks.Add(DownloadWithSemaphore(() => DownloadResource(
                             resource.AbsoluteUrl,
                             GetRelativePathForUrl(resource.AbsoluteUrl, baseUri),
-                            cancellationToken));
+                            cancellationToken), cancellationToken));
                     }
                     else if (resource.IsPage && depth == 0)
                     {
@@ -325,6 +333,9 @@ using System.Net.Http;
                 }
             }
 
+            // Handle srcset attributes replacement specifically
+            html = UpdateSrcsetAttributes(html, resources, baseUri, relativePath);
+
             return html;
         }
 
@@ -340,7 +351,7 @@ using System.Net.Http;
 
             OnStatusChanged($"Found {resources.Count} resources in CSS", false);
 
-            // Download resources (remove duplicates by absolute URL)
+            // Download resources (remove duplicates by absolute URL) with thread control
             var downloadTasks = new List<Task>();
             var uniqueResources = resources.GroupBy(r => r.AbsoluteUrl).Select(g => g.First()).ToList();
             
@@ -352,10 +363,10 @@ using System.Net.Http;
                 if (ShouldDownload(resource.AbsoluteUrl, baseUri))
                 {
                     OnStatusChanged($"Downloading CSS resource: {resource.AbsoluteUrl}", false);
-                    downloadTasks.Add(DownloadResource(
+                    downloadTasks.Add(DownloadWithSemaphore(() => DownloadResource(
                         resource.AbsoluteUrl,
                         GetRelativePathForUrl(resource.AbsoluteUrl, baseUri),
-                        cancellationToken));
+                        cancellationToken), cancellationToken));
                 }
             }
 
@@ -612,7 +623,167 @@ using System.Net.Http;
                 }
             }
 
+            // Handle srcset attributes separately
+            var srcsetResources = ExtractSrcsetResources(html, currentUrl, baseUri);
+            resources.AddRange(srcsetResources);
+
             return resources;
+        }
+
+        private List<ResourceInfo> ExtractSrcsetResources(string html, string currentUrl, Uri baseUri)
+        {
+            var resources = new List<ResourceInfo>();
+            
+            // Find all img tags with srcset attributes
+            var srcsetPattern = @"<img[^>]*srcset=[""']([^""']+)[""'][^>]*>";
+            var matches = Regex.Matches(html, srcsetPattern, RegexOptions.IgnoreCase);
+            
+            OnStatusChanged($"Found {matches.Count} srcset attributes to process", false);
+            
+            foreach (Match match in matches)
+            {
+                if (match.Groups.Count > 1)
+                {
+                    var srcsetValue = match.Groups[1].Value;
+                    OnStatusChanged($"Processing srcset: {srcsetValue}", false);
+                    
+                    // Parse individual URLs from srcset
+                    // srcset format: "url1 descriptor1, url2 descriptor2, ..."
+                    var srcsetUrls = ParseSrcsetUrls(srcsetValue);
+                    
+                    foreach (var url in srcsetUrls)
+                    {
+                        if (string.IsNullOrEmpty(url) ||
+                            url.StartsWith("#") ||
+                            url.StartsWith("data:") ||
+                            url.StartsWith("mailto:") ||
+                            url.StartsWith("javascript:"))
+                            continue;
+
+                        var absoluteUrl = GetAbsoluteUrl(url, currentUrl, baseUri);
+                        OnStatusChanged($"SRCSET IMAGE: {url} -> {absoluteUrl}", false);
+                        
+                        resources.Add(new ResourceInfo
+                        {
+                            OriginalUrl = url,
+                            AbsoluteUrl = absoluteUrl,
+                            IsPage = false
+                        });
+                    }
+                }
+            }
+            
+            return resources;
+        }
+
+        private List<string> ParseSrcsetUrls(string srcsetValue)
+        {
+            var urls = new List<string>();
+            
+            // Split by comma to get individual srcset entries
+            var entries = srcsetValue.Split(',');
+            
+            foreach (var entry in entries)
+            {
+                // Each entry format: "url descriptor" where descriptor is like "813w" or "1.5x"
+                var trimmed = entry.Trim();
+                
+                // Find the first space to separate URL from descriptor
+                var spaceIndex = trimmed.IndexOf(' ');
+                if (spaceIndex > 0)
+                {
+                    var url = trimmed.Substring(0, spaceIndex).Trim();
+                    urls.Add(url);
+                }
+                else if (!string.IsNullOrEmpty(trimmed))
+                {
+                    // No descriptor, just URL
+                    urls.Add(trimmed);
+                }
+            }
+            
+            return urls;
+        }
+
+        private string UpdateSrcsetAttributes(string html, List<ResourceInfo> resources, Uri baseUri, string relativePath)
+        {
+            // Find all srcset attributes and update them
+            var srcsetPattern = @"(<img[^>]*srcset=[""'])([^""']+)([""'][^>]*>)";
+            
+            return Regex.Replace(html, srcsetPattern, (match) =>
+            {
+                var beforeSrcset = match.Groups[1].Value;
+                var srcsetValue = match.Groups[2].Value;
+                var afterSrcset = match.Groups[3].Value;
+                
+                OnStatusChanged($"Updating srcset: {srcsetValue}", false);
+                
+                // Update each URL in the srcset
+                var updatedSrcset = UpdateSrcsetValue(srcsetValue, resources, baseUri, relativePath);
+                
+                OnStatusChanged($"Updated srcset to: {updatedSrcset}", false);
+                
+                return beforeSrcset + updatedSrcset + afterSrcset;
+            }, RegexOptions.IgnoreCase);
+        }
+
+        private string UpdateSrcsetValue(string srcsetValue, List<ResourceInfo> resources, Uri baseUri, string relativePath)
+        {
+            var entries = srcsetValue.Split(',');
+            var updatedEntries = new List<string>();
+            
+            foreach (var entry in entries)
+            {
+                var trimmed = entry.Trim();
+                var spaceIndex = trimmed.IndexOf(' ');
+                
+                if (spaceIndex > 0)
+                {
+                    var url = trimmed.Substring(0, spaceIndex).Trim();
+                    var descriptor = trimmed.Substring(spaceIndex).Trim();
+                    
+                    // Find the corresponding resource to get the local path
+                    var resource = resources.FirstOrDefault(r => r.OriginalUrl == url);
+                    if (resource != null && ShouldDownload(resource.AbsoluteUrl, baseUri))
+                    {
+                        var localPath = GetLocalPath(resource.AbsoluteUrl, baseUri, relativePath);
+                        updatedEntries.Add($"{localPath} {descriptor}");
+                    }
+                    else
+                    {
+                        updatedEntries.Add(trimmed);
+                    }
+                }
+                else if (!string.IsNullOrEmpty(trimmed))
+                {
+                    // No descriptor, just URL
+                    var resource = resources.FirstOrDefault(r => r.OriginalUrl == trimmed);
+                    if (resource != null && ShouldDownload(resource.AbsoluteUrl, baseUri))
+                    {
+                        var localPath = GetLocalPath(resource.AbsoluteUrl, baseUri, relativePath);
+                        updatedEntries.Add(localPath);
+                    }
+                    else
+                    {
+                        updatedEntries.Add(trimmed);
+                    }
+                }
+            }
+            
+            return string.Join(", ", updatedEntries);
+        }
+
+        private async Task DownloadWithSemaphore(Func<Task> downloadFunc, CancellationToken cancellationToken)
+        {
+            await _downloadSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                await downloadFunc();
+            }
+            finally
+            {
+                _downloadSemaphore.Release();
+            }
         }
 
         private async Task DownloadResource(string url, string relativePath, CancellationToken cancellationToken)

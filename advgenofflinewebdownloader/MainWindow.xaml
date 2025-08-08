@@ -77,6 +77,29 @@
                 <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                 <Setter Property="Margin" Value="0,0,0,8"/>
             </Style>
+            
+            <!-- Modern MenuBar Style -->
+            <Style x:Key="ModernMenuBarStyle" TargetType="muxc:MenuBar">
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+            
+            <!-- Modern MenuBarItem Style -->
+            <Style x:Key="ModernMenuBarItemStyle" TargetType="muxc:MenuBarItem">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="Margin" Value="4,0"/>
+            </Style>
+            
+            <!-- Modern MenuFlyoutItem Style -->
+            <Style x:Key="ModernMenuFlyoutItemStyle" TargetType="MenuFlyoutItem">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Padding" Value="12,8"/>
+            </Style>
         </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="60"/>
@@ -94,22 +117,23 @@
                           Margin="24,0"/>
                 
                 <!-- Menu Bar -->
-                <muxc:MenuBar HorizontalAlignment="Right" Margin="0,10,24,0">
-                    <muxc:MenuBarItem Title="File">
-                        <MenuFlyoutItem Text="Open..." Click="OpenMenuItem_Click"/>
-                        <MenuFlyoutItem Text="Save" Click="SaveMenuItem_Click"/>
-                        <MenuFlyoutItem Text="Save As" Click="SaveAsMenuItem_Click"/>
+                <muxc:MenuBar HorizontalAlignment="Right" Margin="0,10,24,0" 
+                             Style="{StaticResource ModernMenuBarStyle}">
+                    <muxc:MenuBarItem Title="File" Style="{StaticResource ModernMenuBarItemStyle}">
+                        <MenuFlyoutItem Text="Open..." Click="OpenMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Save" Click="SaveMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Save As" Click="SaveAsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                         <MenuFlyoutSeparator />
-                        <MenuFlyoutItem Text="Exit"/>
+                        <MenuFlyoutItem Text="Exit" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                     </muxc:MenuBarItem>
 
-                    <muxc:MenuBarItem Title="Logs">
-                        <MenuFlyoutItem Text="Export to File" Click="ExportLogsMenuItem_Click"/>
-                        <MenuFlyoutItem Text="Clear All" Click="ClearLogsMenuItem_Click"/>
+                    <muxc:MenuBarItem Title="Logs" Style="{StaticResource ModernMenuBarItemStyle}">
+                        <MenuFlyoutItem Text="Export to File" Click="ExportLogsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Clear All" Click="ClearLogsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                     </muxc:MenuBarItem>
 
-                    <muxc:MenuBarItem Title="Help">
-                        <MenuFlyoutItem Text="About"/>
+                    <muxc:MenuBarItem Title="Help" Style="{StaticResource ModernMenuBarItemStyle}">
+                        <MenuFlyoutItem Text="About" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                     </muxc:MenuBarItem>
                 </muxc:MenuBar>
             </Grid>

@@ -11,7 +11,8 @@ namespace advgenofflinewebdownloader.Services
     {
         event EventHandler<DownloadProgressEventArgs> ProgressChanged;
         event EventHandler<DownloadStatusEventArgs> StatusChanged;
-        Task<DownloadResult> DownloadWebsiteAsync(string url, int depth, string baseFolder);
+        Task<DownloadResult> DownloadWebsiteAsync(string url, int depth, string baseFolder, int maxThreads = 4);
+        void CancelDownload();
     }
     public class DownloadProgressEventArgs : EventArgs
     {

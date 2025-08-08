@@ -1,0 +1,125 @@
+name: 🐛 Bug Report
+description: Report a bug in AdvGen Offline Web Downloader
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug! Please fill out the information below to help us understand and reproduce the issue.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have tested with the latest version of the application
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened and what you expected to happen...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+    validations:
+      required: true
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Application Version
+      description: What version of AdvGen Offline Web Downloader are you running?
+      options:
+        - Latest (from main branch)
+        - v1.0.0
+        - v1.0.1
+        - Other (please specify in additional info)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform Architecture
+      description: What platform are you running on?
+      options:
+        - x64 (64-bit Intel/AMD)
+        - x86 (32-bit Intel/AMD)
+        - ARM64 (Surface Pro X, etc.)
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: Operating System
+      description: "Example: Windows 11 Pro 22H2 (Build 22621.1000)"
+      placeholder: "Windows 11 Pro 22H2 (Build 22621.1000)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log Output
+      description: |
+        If applicable, paste relevant log output here. You can find logs in the application's download folder or export them using the Logs menu.
+        **Tip:** You can attach files by clicking this area to highlight it and then dragging files in.
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain your problem.
+
+  - type: input
+    id: url
+    attributes:
+      label: Website URL (if relevant)
+      description: If the bug is related to downloading a specific website, please provide the URL
+      placeholder: "https://example.com"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Information
+      description: |
+        Add any other context about the problem here. This could include:
+        - Network configuration details
+        - Antivirus software that might be interfering
+        - Any error messages not captured above
+        - Workarounds you've tried

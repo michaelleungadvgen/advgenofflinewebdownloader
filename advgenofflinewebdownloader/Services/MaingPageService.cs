@@ -32,7 +32,7 @@ namespace advgenofflinewebdownloader.Services
             };
         }
 
-        public async Task<DownloadResult> Download()
+        public async Task<DownloadResult> Download(int maxThreads = 4)
         {
             if (currentProject == null || string.IsNullOrEmpty(currentProject.URL))
             {
@@ -52,7 +52,8 @@ namespace advgenofflinewebdownloader.Services
                 var result = await fileDownloadService.DownloadWebsiteAsync(
                     currentProject.URL, 
                     depth: 2, 
-                    downloadPath);
+                    downloadPath,
+                    maxThreads);
 
                 if (result.Success)
                 {

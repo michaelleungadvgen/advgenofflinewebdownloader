@@ -1,0 +1,112 @@
+name: Build - WinUI App
+
+on:
+  push:
+    branches: [ main, dev, develop, feature/* ]
+  pull_request:
+    branches: [ main, dev ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'advgenofflinewebdownloader/advgenofflinewebdownloader.csproj'
+  SOLUTION_PATH: 'advgenofflinewebdownloader.sln'
+
+jobs:
+  build:
+    name: Build WinUI Application
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+        
+    steps:
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: 🔧 Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+      with:
+        msbuild-architecture: x64
+        
+    - name: 📦 Restore NuGet Packages
+      run: dotnet restore ${{ env.SOLUTION_PATH }} --verbosity minimal
+      
+    - name: 🏗️ Build Application
+      run: |
+        dotnet build ${{ env.SOLUTION_PATH }} `
+          --configuration ${{ matrix.configuration }} `
+          --no-restore `
+          --verbosity minimal `
+          --property WarningLevel=0
+          
+    - name: ✅ Verify Build Output
+      shell: powershell
+      run: |
+        $buildPath = "advgenofflinewebdownloader/bin/ARM64/${{ matrix.configuration }}"
+        if (Test-Path $buildPath) {
+          $files = Get-ChildItem $buildPath -Recurse -File | Measure-Object
+          Write-Host "✅ Build successful! Found $($files.Count) files in output directory"
+          
+          # Check for main executable
+          $exePath = "$buildPath/net8.0-windows10.0.26100.0/win-arm64/advgenofflinewebdownloader.exe"
+          if (Test-Path $exePath) {
+            Write-Host "✅ Main executable found: advgenofflinewebdownloader.exe"
+          } else {
+            Write-Host "⚠️  Main executable not found at expected path"
+            Get-ChildItem $buildPath -Recurse -Filter "*.exe" | ForEach-Object { Write-Host "Found exe: $($_.FullName)" }
+          }
+        } else {
+          Write-Host "❌ Build output directory not found: $buildPath"
+          Get-ChildItem "advgenofflinewebdownloader/bin" -Recurse | Select-Object FullName | Format-Table
+        }
+        
+    - name: 🧪 Run Tests (if available)
+      run: |
+        # Look for test projects
+        $testProjects = Get-ChildItem -Path . -Recurse -Filter "*Test*.csproj" -ErrorAction SilentlyContinue
+        if ($testProjects.Count -gt 0) {
+          Write-Host "Found $($testProjects.Count) test projects"
+          dotnet test ${{ env.SOLUTION_PATH }} --configuration ${{ matrix.configuration }} --no-build --verbosity minimal
+        } else {
+          Write-Host "No test projects found - skipping test execution"
+        }
+      shell: powershell
+      continue-on-error: true
+      
+    - name: 📤 Upload Build Artifacts
+      if: matrix.configuration == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: winui-app-build-${{ github.sha }}
+        path: |
+          advgenofflinewebdownloader/bin/
+          !advgenofflinewebdownloader/bin/**/*.pdb
+          !advgenofflinewebdownloader/bin/**/ref/
+        retention-days: 14
+        if-no-files-found: warn
+        
+    - name: 📋 Build Summary
+      if: always()
+      shell: powershell
+      run: |
+        Write-Host "🏗️  Build Summary for ${{ matrix.configuration }}"
+        Write-Host "=================================="
+        Write-Host "✅ Solution: ${{ env.SOLUTION_PATH }}"
+        Write-Host "✅ Configuration: ${{ matrix.configuration }}"
+        Write-Host "✅ .NET Version: ${{ env.DOTNET_VERSION }}"
+        Write-Host "✅ Platform: Windows (WinUI 3)"
+        Write-Host ""
+        
+        if ("${{ job.status }}" -eq "success") {
+          Write-Host "🎉 Build completed successfully!"
+        } else {
+          Write-Host "❌ Build encountered issues. Please check the logs above."
+        }

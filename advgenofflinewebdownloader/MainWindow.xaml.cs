@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.Storage.Pickers;
@@ -47,6 +48,9 @@ namespace advgenofflinewebdownloader
         {
             try
             {
+                // Disable download button to prevent multiple concurrent downloads
+                downloadButton.IsEnabled = false;
+                
                 // Manually sync TextBox values to ViewModel (WinUI 3 x:Bind issue workaround)
                 if (_mainWindowView.CurrentProject != null)
                 {
@@ -58,9 +62,12 @@ namespace advgenofflinewebdownloader
                 // Sync ViewModel changes to service
                 _mainWindowView.UpdateCurrentProject();
                 
+                // Get thread count from UI
+                var threadCount = (int)Math.Max(1, Math.Min(numThreadCount.Value, 16));
+                
                 // Debug: Check current project status
                 var currentProject = _mainPageService.GetCurrentProject();
-                var debugMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [DEBUG] Project Name: '{currentProject?.Name ?? "NULL"}', URL: '{currentProject?.URL ?? "NULL"}'";
+                var debugMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [DEBUG] Project Name: '{currentProject?.Name ?? "NULL"}', URL: '{currentProject?.URL ?? "NULL"}', Threads: {threadCount}";
                 lstMessage.Items.Add(debugMessage);
                 WriteToLogFile(debugMessage);
                 
@@ -70,10 +77,11 @@ namespace advgenofflinewebdownloader
                     var errorMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Please enter a valid website URL";
                     lstMessage.Items.Add(errorMessage);
                     WriteToLogFile(errorMessage);
+                    downloadButton.IsEnabled = true; // Re-enable button on validation error
                     return;
                 }
                 
-                var startMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Starting download...";
+                var startMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Starting download with {threadCount} threads...";
                 lstMessage.Items.Add(startMessage);
                 WriteToLogFile(startMessage);
                 
@@ -110,7 +118,8 @@ namespace advgenofflinewebdownloader
                     };
                 }
                 
-                var result = await _mainPageService.Download();
+                // Run download in background task
+                var result = await Task.Run(async () => await _mainPageService.Download(threadCount));
                 
                 if (result.Success)
                 {
@@ -140,6 +149,11 @@ namespace advgenofflinewebdownloader
                 var errorMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Error: {ex.Message}";
                 lstMessage.Items.Add(errorMessage);
                 WriteToLogFile(errorMessage);
+            }
+            finally
+            {
+                // Re-enable download button
+                downloadButton.IsEnabled = true;
             }
         }
 

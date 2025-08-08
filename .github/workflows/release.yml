@@ -1,0 +1,319 @@
+name: Release - Create Distribution Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+      create_release:
+        description: 'Create GitHub release'
+        type: boolean
+        default: true
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'advgenofflinewebdownloader/advgenofflinewebdownloader.csproj'
+  APP_NAME: 'AdvGenOfflineWebDownloader'
+
+jobs:
+  create-release-packages:
+    name: Create Release Packages
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        platform: [x64, x86, ARM64]
+        
+    steps:
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: 🔧 Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+      with:
+        msbuild-architecture: x64
+        
+    - name: 📋 Set Version Information
+      shell: powershell
+      run: |
+        if ("${{ github.event_name }}" -eq "release") {
+          $version = "${{ github.event.release.tag_name }}" -replace "^v", ""
+        } else {
+          $version = "${{ github.event.inputs.version }}"
+        }
+        
+        Write-Host "Release Version: $version"
+        Write-Host "Platform: ${{ matrix.platform }}"
+        
+        echo "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+        echo "PACKAGE_NAME=${{ env.APP_NAME }}-v$version-${{ matrix.platform }}" >> $env:GITHUB_ENV
+        
+    - name: 📦 Restore Dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }} --runtime win-${{ matrix.platform }}
+      
+    - name: 🏗️ Build Release
+      run: |
+        dotnet build ${{ env.PROJECT_PATH }} `
+          --configuration Release `
+          --runtime win-${{ matrix.platform }} `
+          --no-restore `
+          --verbosity minimal `
+          /p:Platform=${{ matrix.platform }} `
+          /p:PublishReadyToRun=true `
+          /p:PublishSingleFile=false `
+          /p:WindowsAppSDKSelfContained=true
+          
+    - name: 📦 Publish Application
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} `
+          --configuration Release `
+          --runtime win-${{ matrix.platform }} `
+          --no-build `
+          --output "publish/${{ matrix.platform }}" `
+          /p:PublishProfile=win-${{ matrix.platform }} `
+          /p:WindowsAppSDKSelfContained=true `
+          /p:PublishReadyToRun=true
+          
+    - name: 📁 Prepare Package Directory
+      shell: powershell
+      run: |
+        $packageDir = "packages/${{ env.PACKAGE_NAME }}"
+        New-Item -ItemType Directory -Path $packageDir -Force
+        
+        # Copy published files
+        Copy-Item -Path "publish/${{ matrix.platform }}/*" -Destination $packageDir -Recurse -Force
+        
+        # Copy documentation and license
+        if (Test-Path "README.md") { Copy-Item "README.md" $packageDir }
+        if (Test-Path "LICENSE") { Copy-Item "LICENSE" $packageDir }
+        if (Test-Path "LICENSE.txt") { Copy-Item "LICENSE.txt" $packageDir }
+        
+        # Create installation instructions
+        @"
+        AdvGen Offline Web Downloader v${{ env.RELEASE_VERSION }}
+        =====================================================
+        
+        Installation Instructions:
+        
+        1. System Requirements:
+           - Windows 10 version 1809 (build 17763) or later
+           - Windows 11 (any version)
+           - Architecture: ${{ matrix.platform }}
+        
+        2. Installation:
+           - Extract all files to a folder of your choice
+           - Double-click 'advgenofflinewebdownloader.exe' to run
+           - No additional installation required
+        
+        3. Features:
+           - Download complete websites with all resources
+           - Multi-threaded downloads (configurable 1-16 threads)
+           - CSS and font file processing
+           - Responsive image srcset support
+           - Project save/load functionality
+           - Real-time download status and logging
+        
+        4. Usage:
+           - Enter website URL and project name
+           - Choose output folder (optional)
+           - Set thread count for concurrent downloads
+           - Click 'Download Website' to start
+        
+        5. Support:
+           - Issues: https://github.com/your-username/advgenofflinewebdownloader/issues
+           - Documentation: README.md
+        
+        Version: ${{ env.RELEASE_VERSION }}
+        Platform: ${{ matrix.platform }}
+        Built: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")
+        "@ | Out-File -FilePath "$packageDir/INSTALLATION.txt" -Encoding UTF8
+        
+        # Create launcher script
+        @"
+        @echo off
+        title AdvGen Offline Web Downloader v${{ env.RELEASE_VERSION }}
+        
+        echo Starting AdvGen Offline Web Downloader...
+        echo Version: ${{ env.RELEASE_VERSION }}
+        echo Platform: ${{ matrix.platform }}
+        echo.
+        
+        REM Check if the executable exists
+        if not exist "advgenofflinewebdownloader.exe" (
+            echo ERROR: advgenofflinewebdownloader.exe not found!
+            echo Please ensure all files are extracted properly.
+            pause
+            exit /b 1
+        )
+        
+        REM Launch the application
+        start "" "advgenofflinewebdownloader.exe"
+        
+        REM Optional: Keep window open for debugging
+        REM pause
+        "@ | Out-File -FilePath "$packageDir/Launch.bat" -Encoding ASCII
+        
+    - name: 🗜️ Create ZIP Package
+      shell: powershell
+      run: |
+        $zipPath = "packages/${{ env.PACKAGE_NAME }}.zip"
+        Compress-Archive -Path "packages/${{ env.PACKAGE_NAME }}/*" -DestinationPath $zipPath -Force
+        
+        # Verify package
+        $zipInfo = Get-Item $zipPath
+        Write-Host "📦 Package created: $($zipInfo.Name)"
+        Write-Host "📏 Package size: $([math]::Round($zipInfo.Length / 1MB, 2)) MB"
+        
+        echo "PACKAGE_PATH=$zipPath" >> $env:GITHUB_ENV
+        
+    - name: 🧪 Test Package Integrity
+      shell: powershell
+      run: |
+        # Test ZIP integrity
+        try {
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("${{ env.PACKAGE_PATH }}")
+          Write-Host "✅ ZIP file integrity verified"
+          Write-Host "📁 Contains $($zip.Entries.Count) files"
+          $zip.Dispose()
+        }
+        catch {
+          Write-Host "❌ ZIP file integrity check failed: $_"
+          exit 1
+        }
+        
+        # Check for required files in package
+        $requiredFiles = @("advgenofflinewebdownloader.exe", "INSTALLATION.txt", "Launch.bat")
+        $tempDir = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+        
+        try {
+          Expand-Archive "${{ env.PACKAGE_PATH }}" -DestinationPath $tempDir -Force
+          
+          foreach ($file in $requiredFiles) {
+            $filePath = Join-Path $tempDir $file
+            if (Test-Path $filePath) {
+              Write-Host "✅ Found required file: $file"
+            } else {
+              Write-Host "❌ Missing required file: $file"
+              exit 1
+            }
+          }
+        }
+        finally {
+          Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        
+    - name: 📤 Upload Package Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}
+        path: ${{ env.PACKAGE_PATH }}
+        retention-days: 90
+        
+    - name: 📋 Package Summary
+      shell: powershell
+      run: |
+        Write-Host "📦 Package Summary"
+        Write-Host "=================="
+        Write-Host "Name: ${{ env.PACKAGE_NAME }}"
+        Write-Host "Version: ${{ env.RELEASE_VERSION }}"
+        Write-Host "Platform: ${{ matrix.platform }}"
+        Write-Host "Path: ${{ env.PACKAGE_PATH }}"
+        
+        $fileInfo = Get-Item "${{ env.PACKAGE_PATH }}"
+        Write-Host "Size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB"
+        Write-Host "Created: $($fileInfo.CreationTime)"
+        
+  # Upload to GitHub Release if this was triggered by a release
+  upload-to-release:
+    name: Upload to GitHub Release
+    needs: create-release-packages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+    
+    strategy:
+      matrix:
+        platform: [x64, x86, ARM64]
+        
+    steps:
+    - name: 📥 Download Package Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}-v${{ env.RELEASE_VERSION }}-${{ matrix.platform }}
+        path: ./packages/
+        
+    - name: 📋 Set Package Information
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
+        
+        echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
+        echo "PACKAGE_NAME=${{ env.APP_NAME }}-v$VERSION-${{ matrix.platform }}" >> $GITHUB_ENV
+        
+    - name: 🚀 Upload Release Asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./packages/${{ env.PACKAGE_NAME }}.zip
+        asset_name: ${{ env.PACKAGE_NAME }}.zip
+        asset_content_type: application/zip
+        
+    - name: 📝 Create Release (Manual Trigger)
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ env.RELEASE_VERSION }}
+        release_name: AdvGen Offline Web Downloader v${{ env.RELEASE_VERSION }}
+        body: |
+          ## AdvGen Offline Web Downloader v${{ env.RELEASE_VERSION }}
+          
+          ### 🚀 Features
+          - Download complete websites with all resources (HTML, CSS, JS, images, fonts)
+          - Multi-threaded downloads (configurable 1-16 concurrent threads)
+          - Responsive image srcset attribute support
+          - Modern WinUI 3 interface with dark/light theme support
+          - Project save/load functionality with JSON format
+          - Real-time download status and comprehensive logging
+          - CSS resource extraction and processing
+          - Background threading for non-blocking UI
+          
+          ### 📦 Available Downloads
+          - **x64**: For 64-bit Intel/AMD processors (recommended)
+          - **x86**: For 32-bit Intel/AMD processors (legacy systems)
+          - **ARM64**: For ARM64 processors (Surface Pro X, etc.)
+          
+          ### 💻 System Requirements
+          - Windows 10 version 1809 (build 17763) or later
+          - Windows 11 (any version)
+          - .NET 8 Runtime (will be prompted to install if missing)
+          
+          ### 🛠️ Installation
+          1. Download the appropriate package for your system architecture
+          2. Extract the ZIP file to your desired location
+          3. Run `Launch.bat` or double-click `advgenofflinewebdownloader.exe`
+          4. No additional installation required - fully portable!
+          
+          Built on: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        draft: false
+        prerelease: false
