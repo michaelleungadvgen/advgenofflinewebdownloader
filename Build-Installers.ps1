@@ -67,8 +67,18 @@ if (-not $SkipMSIX) {
     & dotnet msbuild @msbuildArgs
     
     if ($LASTEXITCODE -eq 0) {
-        # Look for generated MSIX files
+        # Look for generated MSIX files in AppxPackages directory
+        Write-Host "Searching for MSIX in: $msixOutputDir" -ForegroundColor Gray
         $msixFiles = Get-ChildItem $msixOutputDir -Filter "*.msix" -Recurse
+        
+        # Also search in the AppxPackages directory where MSBuild creates the files
+        $appxPackagesDir = Join-Path (Split-Path $appProjectPath) "AppxPackages"
+        if (Test-Path $appxPackagesDir) {
+            Write-Host "Also searching in AppxPackages: $appxPackagesDir" -ForegroundColor Gray
+            $appxMsixFiles = Get-ChildItem $appxPackagesDir -Filter "*.msix" -Recurse
+            $msixFiles = @($msixFiles) + @($appxMsixFiles)
+        }
+        
         if ($msixFiles.Count -eq 0) {
             $msixFiles = Get-ChildItem $msixOutputDir -Filter "*.appxupload" -Recurse
         }

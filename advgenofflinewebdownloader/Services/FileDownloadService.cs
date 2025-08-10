@@ -199,6 +199,7 @@ using System.Net.Http;
                     // Process HTML content
                     var processedContent = await ProcessHtmlContent(content, url, depth, relativePath, cancellationToken);
                     await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
+                    OnStatusChanged($"Downloaded HTML file: {fileName} ({System.Text.Encoding.UTF8.GetByteCount(processedContent)} bytes)", false);
                 }
                 else if (isCssContentType || isCssFileName || isCssUrl || isCssContent || isTextPlainCss)
                 {
@@ -211,6 +212,7 @@ using System.Net.Http;
                     // Process CSS content for font and resource references
                     var processedContent = await ProcessCssContent(content, url, relativePath, cancellationToken);
                     await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
+                    OnStatusChanged($"Downloaded CSS file: {fileName} ({System.Text.Encoding.UTF8.GetByteCount(processedContent)} bytes)", false);
                 }
                 else
                 {
@@ -218,6 +220,7 @@ using System.Net.Http;
                     // Save binary content
                     var bytes = await response.Content.ReadAsByteArrayAsync();
                     await File.WriteAllBytesAsync(filePath, bytes, cancellationToken);
+                    OnStatusChanged($"Downloaded file: {fileName} ({bytes.Length} bytes)", false);
                 }
 
                 IncrementProgress(fileName);
@@ -836,12 +839,14 @@ using System.Net.Http;
                     // Process CSS content to download its resources
                     var processedContent = await ProcessCssContent(content, url, relativePath, cancellationToken);
                     await File.WriteAllTextAsync(filePath, processedContent, cancellationToken);
+                    OnStatusChanged($"Downloaded CSS resource: {fileName} ({System.Text.Encoding.UTF8.GetByteCount(processedContent)} bytes)", false);
                 }
                 else
                 {
                     // Save binary content for non-CSS resources
                     var bytes = await response.Content.ReadAsByteArrayAsync();
                     await File.WriteAllBytesAsync(filePath, bytes, cancellationToken);
+                    OnStatusChanged($"Downloaded resource: {fileName} ({bytes.Length} bytes)", false);
                 }
 
                 IncrementProgress(fileName);

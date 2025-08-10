@@ -1,0 +1,30 @@
+﻿MSIX Package Installation Instructions
+=====================================
+
+This MSIX package can be installed in several ways:
+
+1. DOUBLE-CLICK INSTALLATION (Recommended):
+   - Double-click the .msix file
+   - Click 'Install' when prompted
+   - The app will appear in Start Menu
+
+2. POWERSHELL INSTALLATION:
+   - Open PowerShell as Administrator
+   - Run: Add-AppxPackage -Path "AdvGenOfflineWebDownloader-v1.0.0.0-x64.msix"
+
+3. DEVELOPER MODE (For unsigned packages):
+   - Go to Settings > Update & Security > For Developers
+   - Enable 'Developer Mode'
+   - Then double-click the .msix file
+
+SYSTEM REQUIREMENTS:
+- Windows 10 version 1809 (17763) or later
+- Windows 11 (any version)
+
+UNINSTALLATION:
+- Go to Settings > Apps > Apps & Features
+- Find "AdvGen Offline Web Downloader"
+- Click Uninstall
+
+Package Version: 1.0.0.0
+Platform: x64
