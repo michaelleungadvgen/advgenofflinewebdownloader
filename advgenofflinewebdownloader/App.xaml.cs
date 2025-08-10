@@ -65,11 +65,20 @@ namespace advgenofflinewebdownloader
         /// <param name="args">Details about the launch request and process.</param>
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
+            try
+            {
+                // call m_window from the service provider
+                m_window = _serviceProvider.GetRequiredService<MainWindow>();
 
-            // call m_window from the service provider
-            m_window = _serviceProvider.GetRequiredService<MainWindow>();
-
-            m_window.Activate();
+                m_window.Activate();
+            }
+            catch (Exception ex)
+            {
+                // Write error to a file for debugging
+                string errorFile = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "AdvGenWebDownloader_Error.txt");
+                System.IO.File.WriteAllText(errorFile, $"App startup error: {ex.Message}\n\nStack trace: {ex.StackTrace}\n\nTime: {DateTime.Now}");
+                Environment.Exit(1);
+            }
         }
 
         private Window m_window;

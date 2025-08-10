@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(dotnet build)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(move \"Build-Installers.ps1\" \"Build-Installers-Broken.ps1\")",
+      "Bash(move \"Build-Installers-Fixed.ps1\" \"Build-Installers.ps1\")",
+      "Bash(powershell:*)",
+      "Bash(dir \"C:\\Users\\advgen10\\source\\repos\\advgenofflinewebdownloader\\advgenofflinewebdownloader\\AppxPackages\\advgenofflinewebdownloader__x64_Test\"\" /s *.msix)",
+      "Bash(dir:*)",
+      "Bash(dotnet publish:*)",
+      "Bash(.advgenofflinewebdownloader.exe)",
+      "Bash(dotnet clean:*)",
+      "Bash(dotnet restore:*)"
     ],
     "deny": []
   }

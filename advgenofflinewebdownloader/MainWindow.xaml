@@ -7,7 +7,6 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
-
     mc:Ignorable="d">
     
     <Grid Background="#f8fafb">
@@ -124,7 +123,7 @@
                         <MenuFlyoutItem Text="Save" Click="SaveMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                         <MenuFlyoutItem Text="Save As" Click="SaveAsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                         <MenuFlyoutSeparator />
-                        <MenuFlyoutItem Text="Exit" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Exit" Click="ExitMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                     </muxc:MenuBarItem>
 
                     <muxc:MenuBarItem Title="Logs" Style="{StaticResource ModernMenuBarItemStyle}">
@@ -134,6 +133,8 @@
 
                     <muxc:MenuBarItem Title="Help" Style="{StaticResource ModernMenuBarItemStyle}">
                         <MenuFlyoutItem Text="About" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Resize to 1200x800" Click="ResizeMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                     </muxc:MenuBarItem>
                 </muxc:MenuBar>
             </Grid>

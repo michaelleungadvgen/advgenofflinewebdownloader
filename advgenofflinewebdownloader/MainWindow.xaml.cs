@@ -42,7 +42,78 @@ namespace advgenofflinewebdownloader
             _mainPageService = mainPageService;
             _mainWindowView = mainWindowViewModel;
             this.InitializeComponent();
+            
+            // Set window title
+            this.Title = "AdvGen Offline Web Downloader";
+           
+            // Subscribe to the Activated event to set window size after window is fully initialized
+            this.Activated += MainWindow_Activated;
         }
+
+        private bool _windowSizeSet = false;
+        
+        private async void MainWindow_Activated(object sender, Microsoft.UI.Xaml.WindowActivatedEventArgs e)
+        {
+            // Only set size once when window is first activated
+            if (!_windowSizeSet && e.WindowActivationState != Microsoft.UI.Xaml.WindowActivationState.Deactivated)
+            {
+                _windowSizeSet = true;
+                
+                // Set window size after window is fully loaded
+                SetWindowSize();
+                this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 10000, 10000));
+                // Also try again after a short delay to ensure the window is fully initialized
+                await Task.Delay(100);
+                SetWindowSize();
+            }
+        }
+
+        private void SetWindowSize()
+        {
+            try
+            {
+                // Method 1: Using AppWindow (preferred for WinUI 3)
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+                var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+                
+                if (appWindow != null)
+                {
+                    // Set the desired size
+                    var targetSize = new Windows.Graphics.SizeInt32 { Width = 1200, Height = 1000 };
+                    appWindow.Resize(targetSize);
+                    this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 1500, 1500));
+                    // Debug output
+                    System.Diagnostics.Debug.WriteLine($"Window resized to: {targetSize.Width}x{targetSize.Height}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("AppWindow is null - cannot resize");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to resize window: {ex.Message}");
+                
+                // Method 2: Fallback using Win32 API if AppWindow fails
+                try
+                {
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                    SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 1200, 1000, SWP_NOMOVE | SWP_NOZORDER);
+                    System.Diagnostics.Debug.WriteLine("Used Win32 SetWindowPos fallback");
+                }
+                catch (Exception fallbackEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Win32 fallback also failed: {fallbackEx.Message}");
+                }
+            }
+        }
+
+        // Win32 API fallback for window sizing
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOZORDER = 0x0004;
 
         private async void downloadButton_Click(object sender, RoutedEventArgs e)
         {
@@ -327,6 +398,18 @@ namespace advgenofflinewebdownloader
         private void ClearLogsMenuItem_Click(object sender, RoutedEventArgs e)
         {
             lstMessage.Items.Clear();
+        }
+
+        private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            // Close the application gracefully
+            this.Close();
+        }
+
+        private void ResizeMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            // Manual resize trigger for testing
+            SetWindowSize();
         }
 
         // Thread-safe log file writing with infinite loop protection
