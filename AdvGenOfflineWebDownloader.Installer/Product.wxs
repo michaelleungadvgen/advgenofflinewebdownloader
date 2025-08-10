@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  
+  <!-- Product Definition -->
+  <Product Id="*" 
+           Name="AdvGen Offline Web Downloader" 
+           Language="1033" 
+           Version="1.0.0.0" 
+           Manufacturer="AdvGen Software" 
+           UpgradeCode="12345678-1234-1234-1234-123456789000">
+    
+    <!-- Package Information -->
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Description="AdvGen Offline Web Downloader Installation Package"
+             Comments="A powerful tool for downloading complete websites with all resources"
+             Manufacturer="AdvGen Software" />
+
+    <!-- Media and Cab Files -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of AdvGen Offline Web Downloader is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Prerequisites -->
+    <PropertyRef Id="WIX_IS_NETFRAMEWORK_48_OR_LATER_INSTALLED"/>
+    <Condition Message="This application requires .NET Framework 4.8 or later. Please install .NET Framework 4.8 and run this installer again.">
+      <![CDATA[Installed OR WIX_IS_NETFRAMEWORK_48_OR_LATER_INSTALLED]]>
+    </Condition>
+
+    <!-- Installation Directory Structure -->
+    <Feature Id="ProductFeature" Title="AdvGen Offline Web Downloader" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="DesktopShortcut" />
+      <ComponentGroupRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!-- UI -->
+    <UI>
+      <UIRef Id="WixUI_InstallDir" />
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2">1</Publish>
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2">1</Publish>
+    </UI>
+
+    <!-- License -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    
+    <!-- Banner and Dialog Images -->
+    <WixVariable Id="WixUIBannerBmp" Value="Banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="Dialog.bmp" />
+    
+    <!-- Installation Directory -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    
+    <!-- Custom Properties -->
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/your-username/advgenofflinewebdownloader" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/your-username/advgenofflinewebdownloader" />
+    <Property Id="ARPNOMODIFY" Value="yes" Secure="yes" />
+    
+  </Product>
+
+  <!-- Directory Structure -->
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="ManufacturerFolder" Name="AdvGen Software">
+          <Directory Id="INSTALLFOLDER" Name="AdvGen Offline Web Downloader" />
+        </Directory>
+      </Directory>
+      
+      <!-- Desktop -->
+      <Directory Id="DesktopFolder" Name="Desktop"/>
+      
+      <!-- Start Menu -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="AdvGen Offline Web Downloader"/>
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <!-- Components -->
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      
+      <!-- Main Application Files -->
+      <Component Id="MainExecutable" Guid="12345678-1234-1234-1234-123456789001">
+        <File Id="MainExe" 
+              Source="$(var.SourceDir)\advgenofflinewebdownloader.exe" 
+              KeyPath="yes" 
+              Checksum="yes">
+          <Shortcut Id="MainExeShortcut" 
+                    Directory="ApplicationProgramsFolder" 
+                    Name="AdvGen Offline Web Downloader" 
+                    Description="Download complete websites with all resources"
+                    WorkingDirectory="INSTALLFOLDER" 
+                    Icon="AppIcon.ico" />
+        </File>
+      </Component>
+
+      <!-- Application Dependencies -->
+      <Component Id="Dependencies" Guid="12345678-1234-1234-1234-123456789002">
+        <File Id="NewtonsoftJson" Source="$(var.SourceDir)\Newtonsoft.Json.dll" KeyPath="yes" />
+        <File Id="MicrosoftExtensionsDI" Source="$(var.SourceDir)\Microsoft.Extensions.DependencyInjection.dll" />
+        <File Id="MicrosoftExtensionsAbstractions" Source="$(var.SourceDir)\Microsoft.Extensions.DependencyInjection.Abstractions.dll" />
+      </Component>
+
+      <!-- WindowsAppSDK Dependencies -->
+      <Component Id="WindowsAppSDK" Guid="12345678-1234-1234-1234-123456789003">
+        <File Id="MicrosoftWindowsAppSDK" Source="$(var.SourceDir)\Microsoft.WindowsAppSDK.dll" />
+        <File Id="MicrosoftWinUI" Source="$(var.SourceDir)\Microsoft.WinUI.dll" />
+        <File Id="WinUI3" Source="$(var.SourceDir)\WinUI3.dll" />
+      </Component>
+
+      <!-- Configuration Files -->
+      <Component Id="ConfigFiles" Guid="12345678-1234-1234-1234-123456789004">
+        <File Id="AppConfig" Source="$(var.SourceDir)\advgenofflinewebdownloader.dll.config" />
+        <File Id="AppManifest" Source="$(var.SourceDir)\advgenofflinewebdownloader.exe.manifest" />
+      </Component>
+
+      <!-- Documentation -->
+      <Component Id="Documentation" Guid="12345678-1234-1234-1234-123456789005">
+        <File Id="ReadMe" Source="$(var.SourceDir)\README.md" />
+        <File Id="License" Source="$(var.SourceDir)\LICENSE.txt" />
+        <File Id="InstallationGuide" Source="$(var.SourceDir)\INSTALLATION.txt" />
+      </Component>
+
+      <!-- Registry Entries -->
+      <Component Id="RegistryEntries" Guid="12345678-1234-1234-1234-123456789006">
+        <RegistryKey Root="HKLM" Key="SOFTWARE\AdvGen Software\AdvGen Offline Web Downloader">
+          <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" KeyPath="yes" />
+          <RegistryValue Type="string" Name="Version" Value="1.0.0.0" />
+          <RegistryValue Type="string" Name="Publisher" Value="AdvGen Software" />
+        </RegistryKey>
+        
+        <!-- File Association for .webproject files -->
+        <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.webproject">
+          <RegistryValue Type="string" Value="AdvGenWebProject" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\AdvGenWebProject">
+          <RegistryValue Type="string" Value="AdvGen Web Project File" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\AdvGenWebProject\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]advgenofflinewebdownloader.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+      </Component>
+
+      <!-- App Icon -->
+      <Component Id="AppIcon" Guid="12345678-1234-1234-1234-123456789007">
+        <File Id="AppIconFile" Source="AppIcon.ico" KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- Desktop Shortcut -->
+    <ComponentGroup Id="DesktopShortcut" Directory="DesktopFolder">
+      <Component Id="DesktopShortcutComponent" Guid="12345678-1234-1234-1234-123456789008">
+        <Shortcut Id="DesktopShortcut" 
+                  Name="AdvGen Offline Web Downloader" 
+                  Description="Download complete websites with all resources"
+                  Target="[INSTALLFOLDER]advgenofflinewebdownloader.exe" 
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon.ico" />
+        <RemoveFolder Id="DesktopShortcutFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" 
+                       Key="Software\AdvGen Software\AdvGen Offline Web Downloader" 
+                       Name="DesktopShortcut" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Start Menu Shortcut -->
+    <ComponentGroup Id="StartMenuShortcut" Directory="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcutComponent" Guid="12345678-1234-1234-1234-123456789009">
+        <Shortcut Id="StartMenuShortcut" 
+                  Name="AdvGen Offline Web Downloader" 
+                  Description="Download complete websites with all resources"
+                  Target="[INSTALLFOLDER]advgenofflinewebdownloader.exe" 
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon.ico" />
+        <Shortcut Id="UninstallShortcut" 
+                  Name="Uninstall AdvGen Offline Web Downloader" 
+                  Target="[System64Folder]msiexec.exe" 
+                  Arguments="/x [ProductCode]" 
+                  Description="Uninstall AdvGen Offline Web Downloader" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" 
+                       Key="Software\AdvGen Software\AdvGen Offline Web Downloader" 
+                       Name="StartMenuShortcut" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Icon Definition -->
+  <Fragment>
+    <Icon Id="AppIcon.ico" SourceFile="AppIcon.ico" />
+  </Fragment>
+
+</Wix>

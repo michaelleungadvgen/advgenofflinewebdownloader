@@ -8,16 +8,17 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="bf72ee3d-f7e5-466c-8301-6e8b5a31329a"
-    Publisher="CN=advgen10"
+    Name="AdvGenOfflineWebDownloader"
+    Publisher="CN=AdvGen Software"
     Version="1.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="bf72ee3d-f7e5-466c-8301-6e8b5a31329a" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>advgenofflinewebdownloader</DisplayName>
-    <PublisherDisplayName>advgen10</PublisherDisplayName>
+    <DisplayName>AdvGen Offline Web Downloader</DisplayName>
+    <PublisherDisplayName>AdvGen Software</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
+    <Description>A powerful tool for downloading complete websites with all resources including CSS, fonts, images, and JavaScript files. Supports multi-threaded downloads and responsive image srcset attributes.</Description>
   </Properties>
 
   <Dependencies>
@@ -34,9 +35,9 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="advgenofflinewebdownloader"
-        Description="advgenofflinewebdownloader"
-        BackgroundColor="transparent"
+        DisplayName="AdvGen Offline Web Downloader"
+        Description="Download complete websites with all resources offline"
+        BackgroundColor="#3b82f6"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />

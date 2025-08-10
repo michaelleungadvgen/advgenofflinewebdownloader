@@ -1,0 +1,400 @@
+name: Package - Build Installation Packages
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g., 1.0.0.0)'
+        required: true
+        default: '1.0.0.0'
+      platforms:
+        description: 'Platforms to build (comma-separated: x64,x86,ARM64)'
+        required: true
+        default: 'x64,x86,ARM64'
+      create_msix:
+        description: 'Create MSIX packages'
+        type: boolean
+        default: true
+      create_zip:
+        description: 'Create portable ZIP packages'
+        type: boolean
+        default: true
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'advgenofflinewebdownloader/advgenofflinewebdownloader.csproj'
+  SOLUTION_PATH: 'advgenofflinewebdownloader.sln'
+
+jobs:
+  build-packages:
+    name: Build Installation Packages
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        platform: [x64, x86, ARM64]
+        
+    steps:
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: 🔧 Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+      with:
+        msbuild-architecture: x64
+        
+    - name: 📋 Set Version Information
+      shell: powershell
+      run: |
+        if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -match "refs/tags/v(.+)") {
+          $version = $matches[1]
+          if ($version -notmatch "^\d+\.\d+\.\d+\.\d+$") {
+            $version = "$version.0"  # Add patch version if missing
+          }
+        } elseif ("${{ github.event.inputs.version }}") {
+          $version = "${{ github.event.inputs.version }}"
+        } else {
+          $version = "1.0.0.0"
+        }
+        
+        Write-Host "Package Version: $version"
+        Write-Host "Platform: ${{ matrix.platform }}"
+        
+        # Skip platform if not in requested list (for workflow_dispatch)
+        if ("${{ github.event.inputs.platforms }}" -and "${{ github.event_name }}" -eq "workflow_dispatch") {
+          $requestedPlatforms = "${{ github.event.inputs.platforms }}" -split ","
+          $requestedPlatforms = $requestedPlatforms | ForEach-Object { $_.Trim() }
+          
+          if ("${{ matrix.platform }}" -notin $requestedPlatforms) {
+            Write-Host "Skipping platform ${{ matrix.platform }} - not in requested list"
+            echo "SKIP_PLATFORM=true" >> $env:GITHUB_ENV
+            exit 0
+          }
+        }
+        
+        echo "PACKAGE_VERSION=$version" >> $env:GITHUB_ENV
+        echo "PACKAGE_NAME=AdvGenOfflineWebDownloader-v$version-${{ matrix.platform }}" >> $env:GITHUB_ENV
+        
+    - name: ⏭️ Skip Platform Check
+      if: env.SKIP_PLATFORM == 'true'
+      run: echo "Skipping this platform build"
+      
+    - name: 📦 Restore Dependencies
+      if: env.SKIP_PLATFORM != 'true'
+      run: dotnet restore ${{ env.SOLUTION_PATH }} --verbosity minimal
+      
+    - name: 🏗️ Build Application
+      if: env.SKIP_PLATFORM != 'true'
+      run: |
+        dotnet build ${{ env.SOLUTION_PATH }} `
+          --configuration Release `
+          --platform ${{ matrix.platform }} `
+          --no-restore `
+          --verbosity minimal `
+          /p:Platform=${{ matrix.platform }} `
+          /p:WindowsAppSDKSelfContained=true `
+          /p:PublishReadyToRun=true
+          
+    - name: 📱 Build MSIX Package
+      if: env.SKIP_PLATFORM != 'true' && (github.event.inputs.create_msix != 'false' || github.event_name != 'workflow_dispatch')
+      shell: powershell
+      run: |
+        $outputDir = "Packages\MSIX\${{ matrix.platform }}"
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+        
+        Write-Host "Building MSIX package..."
+        
+        # Build and publish for MSIX
+        dotnet publish ${{ env.PROJECT_PATH }} `
+          --configuration Release `
+          --runtime win-${{ matrix.platform }} `
+          --output $outputDir `
+          --verbosity minimal `
+          /p:Platform=${{ matrix.platform }} `
+          /p:GenerateAppxPackageOnBuild=true `
+          /p:AppxPackageDir=$outputDir\ `
+          /p:UapAppxPackageBuildMode=CI `
+          /p:WindowsAppSDKSelfContained=true
+        
+        # Find generated package
+        $packageFiles = Get-ChildItem $outputDir -Filter "*.msix" -Recurse
+        if ($packageFiles.Count -eq 0) {
+          $packageFiles = Get-ChildItem $outputDir -Filter "*.appx" -Recurse
+        }
+        
+        if ($packageFiles.Count -gt 0) {
+          $packageFile = $packageFiles[0]
+          $finalPath = "Packages\${{ env.PACKAGE_NAME }}.msix"
+          
+          New-Item -ItemType Directory -Path (Split-Path $finalPath) -Force | Out-Null
+          Copy-Item $packageFile.FullName $finalPath -Force
+          
+          Write-Host "✅ MSIX package created: $finalPath"
+          echo "MSIX_PACKAGE_PATH=$finalPath" >> $env:GITHUB_ENV
+          
+          # Get package info
+          $packageSize = [math]::Round((Get-Item $finalPath).Length / 1MB, 2)
+          Write-Host "📏 MSIX package size: $packageSize MB"
+        } else {
+          Write-Warning "⚠️ No MSIX package files found"
+        }
+        
+    - name: 📁 Build Portable ZIP Package
+      if: env.SKIP_PLATFORM != 'true' && (github.event.inputs.create_zip != 'false' || github.event_name != 'workflow_dispatch')
+      shell: powershell
+      run: |
+        $appBinPath = "advgenofflinewebdownloader\bin\${{ matrix.platform }}\Release\net8.0-windows10.0.26100.0\win-${{ matrix.platform }}"
+        
+        if (-not (Test-Path $appBinPath)) {
+          Write-Warning "Application binary path not found: $appBinPath"
+          exit 0
+        }
+        
+        $zipTempDir = "Packages\ZipTemp\${{ matrix.platform }}"
+        $zipPath = "Packages\${{ env.PACKAGE_NAME }}-Portable.zip"
+        
+        # Clean and create temp directory
+        if (Test-Path $zipTempDir) {
+          Remove-Item $zipTempDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $zipTempDir -Force | Out-Null
+        
+        # Copy application files
+        Copy-Item "$appBinPath\*" $zipTempDir -Recurse -Force
+        
+        # Copy documentation
+        $docFiles = @('README.md', 'LICENSE.txt', 'LICENSE')
+        foreach ($docFile in $docFiles) {
+          if (Test-Path $docFile) {
+            Copy-Item $docFile $zipTempDir -Force
+          }
+        }
+        
+        # Create launch script
+        @"
+        @echo off
+        title AdvGen Offline Web Downloader v${{ env.PACKAGE_VERSION }}
+        
+        echo Starting AdvGen Offline Web Downloader...
+        echo Version: ${{ env.PACKAGE_VERSION }}
+        echo Platform: ${{ matrix.platform }}
+        echo.
+        
+        if not exist "advgenofflinewebdownloader.exe" (
+            echo ERROR: advgenofflinewebdownloader.exe not found!
+            echo Please ensure all files are extracted properly.
+            pause
+            exit /b 1
+        )
+        
+        start "" "advgenofflinewebdownloader.exe"
+        "@ | Out-File (Join-Path $zipTempDir "Launch.bat") -Encoding ASCII
+        
+        # Create installation guide
+        @"
+        AdvGen Offline Web Downloader v${{ env.PACKAGE_VERSION }} - Portable
+        ================================================================
+        
+        System Requirements:
+        - Windows 10 version 1809 (build 17763) or later
+        - Windows 11 (any version)
+        - Architecture: ${{ matrix.platform }}
+        
+        Installation:
+        1. Extract all files to a folder of your choice
+        2. Double-click 'Launch.bat' or 'advgenofflinewebdownloader.exe'
+        3. No additional installation required
+        
+        Features:
+        - Download complete websites with all resources
+        - Multi-threaded downloads (1-16 concurrent threads)
+        - CSS and font file processing
+        - Responsive image srcset support
+        - Project save/load functionality
+        - Real-time download status and logging
+        
+        Version: ${{ env.PACKAGE_VERSION }}
+        Platform: ${{ matrix.platform }}
+        Built: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+        "@ | Out-File (Join-Path $zipTempDir "INSTALLATION.txt") -Encoding UTF8
+        
+        # Create ZIP file
+        Compress-Archive -Path "$zipTempDir\*" -DestinationPath $zipPath -Force
+        
+        # Clean up temp directory
+        Remove-Item $zipTempDir -Recurse -Force
+        
+        Write-Host "✅ Portable ZIP package created: $zipPath"
+        echo "ZIP_PACKAGE_PATH=$zipPath" >> $env:GITHUB_ENV
+        
+        # Get package info
+        $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
+        Write-Host "📏 ZIP package size: $zipSize MB"
+        
+    - name: 🧪 Test Package Integrity
+      if: env.SKIP_PLATFORM != 'true'
+      shell: powershell
+      run: |
+        Write-Host "🧪 Testing package integrity..."
+        
+        # Test MSIX package
+        if ($env:MSIX_PACKAGE_PATH -and (Test-Path $env:MSIX_PACKAGE_PATH)) {
+          $msixInfo = Get-Item $env:MSIX_PACKAGE_PATH
+          Write-Host "✅ MSIX package found: $($msixInfo.Name) ($([math]::Round($msixInfo.Length / 1MB, 2)) MB)"
+          
+          # Basic MSIX validation (check if it's a valid ZIP)
+          try {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($env:MSIX_PACKAGE_PATH)
+            Write-Host "✅ MSIX package structure is valid"
+            $zip.Dispose()
+          } catch {
+            Write-Warning "⚠️ MSIX package structure validation failed: $_"
+          }
+        }
+        
+        # Test ZIP package
+        if ($env:ZIP_PACKAGE_PATH -and (Test-Path $env:ZIP_PACKAGE_PATH)) {
+          $zipInfo = Get-Item $env:ZIP_PACKAGE_PATH
+          Write-Host "✅ ZIP package found: $($zipInfo.Name) ($([math]::Round($zipInfo.Length / 1MB, 2)) MB)"
+          
+          # Test ZIP integrity
+          try {
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($env:ZIP_PACKAGE_PATH)
+            Write-Host "✅ ZIP package integrity verified ($($zip.Entries.Count) files)"
+            
+            # Check for required files
+            $requiredFiles = @("advgenofflinewebdownloader.exe", "Launch.bat", "INSTALLATION.txt")
+            foreach ($file in $requiredFiles) {
+              $entry = $zip.Entries | Where-Object { $_.Name -eq $file }
+              if ($entry) {
+                Write-Host "  ✅ Found: $file"
+              } else {
+                Write-Warning "  ⚠️ Missing: $file"
+              }
+            }
+            
+            $zip.Dispose()
+          } catch {
+            Write-Warning "⚠️ ZIP package integrity check failed: $_"
+          }
+        }
+        
+    - name: 📤 Upload MSIX Package
+      if: env.SKIP_PLATFORM != 'true' && env.MSIX_PACKAGE_PATH
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}-MSIX
+        path: ${{ env.MSIX_PACKAGE_PATH }}
+        retention-days: 90
+        
+    - name: 📤 Upload ZIP Package
+      if: env.SKIP_PLATFORM != 'true' && env.ZIP_PACKAGE_PATH
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}-Portable
+        path: ${{ env.ZIP_PACKAGE_PATH }}
+        retention-days: 90
+        
+    - name: 📋 Package Summary
+      if: env.SKIP_PLATFORM != 'true'
+      shell: powershell
+      run: |
+        Write-Host ""
+        Write-Host "📦 Package Build Summary for ${{ matrix.platform }}" -ForegroundColor Cyan
+        Write-Host "=====================================" -ForegroundColor Cyan
+        Write-Host "Version: ${{ env.PACKAGE_VERSION }}"
+        Write-Host "Platform: ${{ matrix.platform }}"
+        
+        if ($env:MSIX_PACKAGE_PATH) {
+          $msixSize = [math]::Round((Get-Item $env:MSIX_PACKAGE_PATH).Length / 1MB, 2)
+          Write-Host "MSIX Package: ${{ env.PACKAGE_NAME }}.msix ($msixSize MB)"
+        }
+        
+        if ($env:ZIP_PACKAGE_PATH) {
+          $zipSize = [math]::Round((Get-Item $env:ZIP_PACKAGE_PATH).Length / 1MB, 2)
+          Write-Host "ZIP Package: ${{ env.PACKAGE_NAME }}-Portable.zip ($zipSize MB)"
+        }
+
+  # Create GitHub Release if triggered by tag
+  create-release:
+    name: Create GitHub Release
+    needs: build-packages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: 📥 Download All Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./packages/
+        
+    - name: 📋 Prepare Release Information
+      shell: bash
+      run: |
+        VERSION="${GITHUB_REF#refs/tags/v}"
+        echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
+        
+        # List all downloaded packages
+        echo "## Available Packages" > release_notes.md
+        echo "" >> release_notes.md
+        
+        find ./packages -name "*.msix" -o -name "*.zip" | sort | while read file; do
+          filename=$(basename "$file")
+          size=$(du -h "$file" | cut -f1)
+          echo "- **$filename** ($size)" >> release_notes.md
+        done
+        
+        echo "" >> release_notes.md
+        echo "## Installation Options" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### MSIX Packages (Recommended)" >> release_notes.md
+        echo "- Modern Windows installation format" >> release_notes.md
+        echo "- Automatic updates and clean uninstall" >> release_notes.md
+        echo "- Requires Windows 10 version 1809 or later" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Portable ZIP Packages" >> release_notes.md
+        echo "- No installation required" >> release_notes.md
+        echo "- Extract and run anywhere" >> release_notes.md
+        echo "- Compatible with all supported Windows versions" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### System Requirements" >> release_notes.md
+        echo "- Windows 10 version 1809 (build 17763) or later" >> release_notes.md
+        echo "- Windows 11 (any version)" >> release_notes.md
+        echo "- .NET 8 Runtime (will be prompted to install if missing)" >> release_notes.md
+        
+    - name: 🚀 Create Release
+      uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: AdvGen Offline Web Downloader v${{ env.RELEASE_VERSION }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        
+    - name: 📤 Upload Release Assets
+      shell: bash
+      run: |
+        # Upload all packages to the release
+        find ./packages -name "*.msix" -o -name "*.zip" | while read file; do
+          filename=$(basename "$file")
+          echo "Uploading $filename..."
+          
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$file" \
+            "${{ steps.create_release.outputs.upload_url }}?name=$filename"
+        done

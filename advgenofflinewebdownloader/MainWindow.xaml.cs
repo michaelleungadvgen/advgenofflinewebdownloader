@@ -35,6 +35,14 @@ namespace advgenofflinewebdownloader
         private string _currentDownloadFolder;
         private const int MAX_LOG_MESSAGES = 1000; // Limit UI log messages
         
+        // Download statistics tracking
+        private int _filesDownloaded = 0;
+        private int _totalFiles = 0;
+        private long _totalBytesDownloaded = 0;
+        private int _activeThreads = 0;
+        private DateTime _downloadStartTime;
+        private readonly object _statsLock = new object();
+        
         public MainWindowViewModel ViewModel => _mainWindowView;
         
         public MainWindow(IMainPageService mainPageService,MainWindowViewModel mainWindowViewModel)
@@ -42,7 +50,75 @@ namespace advgenofflinewebdownloader
             _mainPageService = mainPageService;
             _mainWindowView = mainWindowViewModel;
             this.InitializeComponent();
+            
+            // Set window title
+            this.Title = "AdvGen Offline Web Downloader";
+           
+            // Subscribe to the Activated event to set window size after window is fully initialized
+            this.Activated += MainWindow_Activated;
         }
+
+        private bool _windowSizeSet = false;
+        
+        private async void MainWindow_Activated(object sender, Microsoft.UI.Xaml.WindowActivatedEventArgs e)
+        {
+            // Only set size once when window is first activated
+            if (!_windowSizeSet && e.WindowActivationState != Microsoft.UI.Xaml.WindowActivationState.Deactivated)
+            {
+                _windowSizeSet = true;
+                
+                // Set window size after window is fully loaded
+                SetWindowSize();
+                this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 10000, 10000));
+                // Also try again after a short delay to ensure the window is fully initialized
+                await Task.Delay(100);
+                SetWindowSize();
+            }
+        }
+
+        private void SetWindowSize()
+        {
+            try
+            {
+                // Method 1: Using AppWindow (preferred for WinUI 3)
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+                var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+                
+                if (appWindow != null)
+                {
+                    // Set the desired size                   
+                    this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 1500, 1500));
+              
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("AppWindow is null - cannot resize");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to resize window: {ex.Message}");
+                
+                // Method 2: Fallback using Win32 API if AppWindow fails
+                try
+                {
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                    SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 1200, 1000, SWP_NOMOVE | SWP_NOZORDER);
+                    System.Diagnostics.Debug.WriteLine("Used Win32 SetWindowPos fallback");
+                }
+                catch (Exception fallbackEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Win32 fallback also failed: {fallbackEx.Message}");
+                }
+            }
+        }
+
+        // Win32 API fallback for window sizing
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOZORDER = 0x0004;
 
         private async void downloadButton_Click(object sender, RoutedEventArgs e)
         {
@@ -85,6 +161,11 @@ namespace advgenofflinewebdownloader
                 lstMessage.Items.Add(startMessage);
                 WriteToLogFile(startMessage);
                 
+                // Initialize download statistics
+                InitializeDownloadStats();
+                UpdateDownloadStatus("Starting...");
+                UpdateActiveThreads(threadCount);
+                
                 // Subscribe to download service events to show status in UI
                 if (_mainPageService is MaingPageService service)
                 {
@@ -112,6 +193,9 @@ namespace advgenofflinewebdownloader
                                 }
                             }
                             
+                            // Update statistics based on status messages
+                            UpdateStatisticsFromStatusMessage(args.Status, args.IsError);
+                            
                             // Also write to log file (with infinite loop protection)
                             WriteToLogFile(logMessage);
                         });
@@ -124,6 +208,11 @@ namespace advgenofflinewebdownloader
                 if (result.Success)
                 {
                     _currentDownloadFolder = result.DownloadFolder;
+                    
+                    // Update final statistics
+                    UpdateFileStats(result.TotalFilesDownloaded, result.TotalFilesDownloaded);
+                    UpdateDownloadStatus("Completed");
+                    UpdateActiveThreads(0);
                     
                     var completedMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Download completed: {result.TotalFilesDownloaded} files downloaded";
                     var folderMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [INFO] Download folder: {result.DownloadFolder}";
@@ -139,6 +228,9 @@ namespace advgenofflinewebdownloader
                 }
                 else
                 {
+                    UpdateDownloadStatus("Failed");
+                    UpdateActiveThreads(0);
+                    
                     var errorMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [ERROR] Download failed: {result.ErrorMessage}";
                     lstMessage.Items.Add(errorMessage);
                     WriteToLogFile(errorMessage);
@@ -328,6 +420,160 @@ namespace advgenofflinewebdownloader
         {
             lstMessage.Items.Clear();
         }
+
+        private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            // Close the application gracefully
+            this.Close();
+        }
+
+        private void ResizeMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            // Manual resize trigger for testing
+            SetWindowSize();
+        }
+
+        #region Download Statistics Methods
+
+        private void InitializeDownloadStats()
+        {
+            lock (_statsLock)
+            {
+                _filesDownloaded = 0;
+                _totalFiles = 0;
+                _totalBytesDownloaded = 0;
+                _activeThreads = 0;
+                _downloadStartTime = DateTime.Now;
+            }
+            UpdateStatsUI();
+        }
+
+        private void UpdateFileStats(int totalFiles, int downloadedFiles)
+        {
+            lock (_statsLock)
+            {
+                _totalFiles = totalFiles;
+                _filesDownloaded = downloadedFiles;
+            }
+            UpdateStatsUI();
+        }
+
+        private void IncrementDownloadedFiles()
+        {
+            lock (_statsLock)
+            {
+                _filesDownloaded++;
+            }
+            UpdateStatsUI();
+        }
+
+        private void UpdateBytesDownloaded(long additionalBytes)
+        {
+            lock (_statsLock)
+            {
+                _totalBytesDownloaded += additionalBytes;
+            }
+            UpdateStatsUI();
+        }
+
+        private void UpdateActiveThreads(int activeThreads)
+        {
+            lock (_statsLock)
+            {
+                _activeThreads = activeThreads;
+            }
+            UpdateStatsUI();
+        }
+
+        private void UpdateDownloadStatus(string status)
+        {
+            this.DispatcherQueue.TryEnqueue(() =>
+            {
+                txtDownloadStatus.Text = status;
+            });
+        }
+
+        private void UpdateStatsUI()
+        {
+            this.DispatcherQueue.TryEnqueue(() =>
+            {
+                lock (_statsLock)
+                {
+                    // Update files count
+                    txtFilesDownloaded.Text = _filesDownloaded.ToString();
+                    
+                    // Update data downloaded with proper formatting
+                    txtDataDownloaded.Text = FormatBytes(_totalBytesDownloaded);
+                    
+                    // Update active threads
+                    txtActiveThreads.Text = _activeThreads.ToString();
+                    
+                    // Calculate and update download speed
+                    var elapsed = DateTime.Now - _downloadStartTime;
+                    if (elapsed.TotalSeconds > 1 && _totalBytesDownloaded > 0)
+                    {
+                        var bytesPerSecond = _totalBytesDownloaded / elapsed.TotalSeconds;
+                        txtDownloadSpeed.Text = FormatBytesPerSecond(bytesPerSecond);
+                    }
+                    else
+                    {
+                        txtDownloadSpeed.Text = "0 KB/s";
+                    }
+                }
+            });
+        }
+
+        private void UpdateStatisticsFromStatusMessage(string status, bool isError)
+        {
+            if (isError)
+                return;
+
+            // Parse different types of status messages to update statistics
+            if (status.Contains("Downloaded file:") || 
+                status.Contains("Downloaded HTML file:") || 
+                status.Contains("Downloaded CSS file:") || 
+                status.Contains("Downloaded CSS resource:") || 
+                status.Contains("Downloaded resource:"))
+            {
+                IncrementDownloadedFiles();
+            }
+            else if (status.Contains("bytes"))
+            {
+                // Try to extract byte count from status messages like "Downloaded 1024 bytes"
+                var matches = System.Text.RegularExpressions.Regex.Matches(status, @"(\d+)\s*bytes?");
+                if (matches.Count > 0 && long.TryParse(matches[0].Groups[1].Value, out long bytes))
+                {
+                    UpdateBytesDownloaded(bytes);
+                }
+            }
+            else if (status.Contains("Starting download") && status.Contains("threads"))
+            {
+                // Extract thread count from messages like "Starting download with 4 threads"
+                var threadMatch = System.Text.RegularExpressions.Regex.Match(status, @"with\s+(\d+)\s+threads?");
+                if (threadMatch.Success && int.TryParse(threadMatch.Groups[1].Value, out int threads))
+                {
+                    UpdateActiveThreads(threads);
+                }
+            }
+        }
+
+        private string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} B";
+            if (bytes < 1048576) return $"{bytes / 1024.0:F1} KB";
+            if (bytes < 1073741824) return $"{bytes / 1048576.0:F1} MB";
+            return $"{bytes / 1073741824.0:F2} GB";
+        }
+
+        private string FormatBytesPerSecond(double bytesPerSecond)
+        {
+            if (bytesPerSecond < 1024) return $"{bytesPerSecond:F0} B/s";
+            if (bytesPerSecond < 1048576) return $"{bytesPerSecond / 1024:F1} KB/s";
+            if (bytesPerSecond < 1073741824) return $"{bytesPerSecond / 1048576:F1} MB/s";
+            return $"{bytesPerSecond / 1073741824:F2} GB/s";
+        }
+
+        #endregion
 
         // Thread-safe log file writing with infinite loop protection
         private readonly object _logFileLock = new object();

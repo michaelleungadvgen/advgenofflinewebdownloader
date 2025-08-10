@@ -7,7 +7,6 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
-
     mc:Ignorable="d">
     
     <Grid Background="#f8fafb">
@@ -124,7 +123,7 @@
                         <MenuFlyoutItem Text="Save" Click="SaveMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                         <MenuFlyoutItem Text="Save As" Click="SaveAsMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                         <MenuFlyoutSeparator />
-                        <MenuFlyoutItem Text="Exit" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutItem Text="Exit" Click="ExitMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                     </muxc:MenuBarItem>
 
                     <muxc:MenuBarItem Title="Logs" Style="{StaticResource ModernMenuBarItemStyle}">
@@ -134,6 +133,8 @@
 
                     <muxc:MenuBarItem Title="Help" Style="{StaticResource ModernMenuBarItemStyle}">
                         <MenuFlyoutItem Text="About" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Resize to 1200x800" Click="ResizeMenuItem_Click" Style="{StaticResource ModernMenuFlyoutItemStyle}"/>
                     </muxc:MenuBarItem>
                 </muxc:MenuBar>
             </Grid>
@@ -220,10 +221,11 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 
                                 <StackPanel Grid.Column="0" Grid.Row="0">
-                                    <TextBlock Text="0" FontSize="24" FontWeight="Bold" 
+                                    <TextBlock x:Name="txtFilesDownloaded" Text="0" FontSize="24" FontWeight="Bold" 
                                               Foreground="{StaticResource PrimaryBrush}"/>
                                     <TextBlock Text="Files Downloaded" 
                                               FontSize="12" 
@@ -231,15 +233,15 @@
                                 </StackPanel>
                                 
                                 <StackPanel Grid.Column="1" Grid.Row="0">
-                                    <TextBlock Text="0%" FontSize="24" FontWeight="Bold" 
-                                              Foreground="{StaticResource SuccessBrush}"/>
-                                    <TextBlock Text="Progress" 
+                                    <TextBlock x:Name="txtDownloadSpeed" Text="0 KB/s" FontSize="24" FontWeight="Bold" 
+                                              Foreground="{StaticResource PrimaryBrush}"/>
+                                    <TextBlock Text="Download Speed" 
                                               FontSize="12" 
                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
                                 
                                 <StackPanel Grid.Column="0" Grid.Row="1" Margin="0,12,0,0">
-                                    <TextBlock Text="Ready" FontSize="14" FontWeight="SemiBold" 
+                                    <TextBlock x:Name="txtDownloadStatus" Text="Ready" FontSize="14" FontWeight="SemiBold" 
                                               Foreground="{StaticResource TextPrimaryBrush}"/>
                                     <TextBlock Text="Status" 
                                               FontSize="12" 
@@ -247,9 +249,17 @@
                                 </StackPanel>
                                 
                                 <StackPanel Grid.Column="1" Grid.Row="1" Margin="0,12,0,0">
-                                    <TextBlock Text="0 MB" FontSize="14" FontWeight="SemiBold" 
+                                    <TextBlock x:Name="txtDataDownloaded" Text="0 MB" FontSize="14" FontWeight="SemiBold" 
                                               Foreground="{StaticResource TextPrimaryBrush}"/>
                                     <TextBlock Text="Downloaded" 
+                                              FontSize="12" 
+                                              Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <StackPanel Grid.Column="1" Grid.Row="2" Margin="0,12,0,0">
+                                    <TextBlock x:Name="txtActiveThreads" Text="0" FontSize="14" FontWeight="SemiBold" 
+                                              Foreground="{StaticResource SuccessBrush}"/>
+                                    <TextBlock Text="Active Threads" 
                                               FontSize="12" 
                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
