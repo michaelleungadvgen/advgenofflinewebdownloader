@@ -79,12 +79,9 @@ namespace advgenofflinewebdownloader
                 
                 if (appWindow != null)
                 {
-                    // Set the desired size
-                    var targetSize = new Windows.Graphics.SizeInt32 { Width = 1200, Height = 1000 };
-                    appWindow.Resize(targetSize);
+                    // Set the desired size                   
                     this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 1500, 1500));
-                    // Debug output
-                    System.Diagnostics.Debug.WriteLine($"Window resized to: {targetSize.Width}x{targetSize.Height}");
+              
                 }
                 else
                 {
